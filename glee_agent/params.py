@@ -33,7 +33,30 @@ class BargainingParams:
     # what the field will actually sign.
     never_concede_below: float = 0.45
     min_accept_share: float = 0.35
+    # The ceiling half of the same clamp. The equilibrium share hits 1.0 whenever
+    # our own delta is 1.0, whatever the opponent's is -- theory says a player who
+    # pays nothing for delay can hold out for everything. No opponent signs that,
+    # so believing it turns into "accept nothing below 97%" and a $0 deadlock.
+    never_demand_above: float = 0.75
 
+    # --- What rejecting is really worth ----------------------------------
+    # Measured over 55 games. The equilibrium continuation assumes an opponent
+    # who concedes toward it; the field does not. Their offers moved a median
+    # +0.5% from first to last however long we waited (12 of 21 flat or worse),
+    # and our counters were accepted 15% of the time at best. So rejecting buys
+    # a small chance our counter lands and otherwise the same number again, one
+    # round poorer. Accept X when X >= p*D*delta + (1-p)*X*delta^2.
+    counter_success_rate: float = 0.15
+    # The demand with the best observed acceptance -- our 40-49% asks landed 15%
+    # of the time, everything above that essentially never.
+    realistic_counter_share: float = 0.45
+
+    # How many rounds a rejection really costs before the game settles. Theory
+    # says one -- reject, propose, they accept -- but the field haggles: observed
+    # play took 7 rounds to move 427k -> 460k on a 1M pot while our own delta of
+    # 0.9 burned 47% of the result. Rejecting is priced over this many rounds of
+    # inflation, not one, which is what makes an impatient player close early.
+    rounds_to_settle: int = 3
     # Accept at this multiple of our continuation value. Slightly below 1.0
     # because one more round of inflation is a real cost and the opponent may
     # not concede at all.
@@ -47,7 +70,29 @@ class BargainingParams:
     # opponent who rejects out of pique costs us the whole pot, so the last
     # offers stay large without being insulting.
     endgame_demand_cap: float = 0.55
-    final_round_demand: float = 0.72
+    # `min_opponent_share` clamps this anyway, so 0.97 is what 0.99 already meant.
+    final_round_demand: float = 0.97
+    # At or above this delta, delay costs us nothing. Combined with holding the
+    # last proposal it licenses the endgame sweep: stall to the final round and
+    # take `final_round_demand`, because rejecting it pays the responder $0.
+    # Below it, stalling burns real money and the normal schedule applies.
+    costless_delay_delta: float = 0.999
+
+    # --- Facing a sweeper -------------------------------------------------
+    # The mirror image: THEY hold the last proposal and are stalling to it. Our
+    # continuation is then whatever a sweeper deigns to leave us, so holding out
+    # for a fair split is holding out for something that is never coming.
+    # Requires this many of our offers refused before we believe it -- an
+    # ordinary stubborn negotiator must not trip it, or we capitulate to anyone
+    # who says no twice.
+    sweep_evidence_rounds: int = 3
+    # ...and their offers must have stayed under this share of the pot. A player
+    # genuinely converging toward a split is negotiating, not sweeping.
+    sweep_evidence_ceiling: float = 0.35
+    # Once believed: bank anything at least this much better than the token a
+    # sweeper leaves at the end. Early crumbs beat late crumbs, and against a
+    # patient sweeper they beat the fair split that will never be offered.
+    sweep_accept_margin: float = 1.5
 
     # Open-ended games have no forced endgame; pretend one exists here so the
     # concession schedule still moves.
@@ -92,6 +137,18 @@ class PersuasionParams:
     lie_ramp_start: float = 0.35
     # Used when the seller is not told v and u and so cannot compute the budget.
     blind_lie_rate: float = 0.25
+    # Safety margin above the buyer's threshold. Their bar is a knife edge -- at
+    # exactly tau they are indifferent, and an indifferent buyer walks -- so the
+    # reputation rule holds our credibility this far clear of it while rounds
+    # remain. The margin is scaled by the fraction of the game still to play, so
+    # it shrinks to nothing on the last round, where there is no reputation left
+    # to protect. That replaces the fixed early-honest/late-greedy ramp: the
+    # aggression now falls out of what the remaining rounds are worth.
+    credibility_margin: float = 0.12
+    # A buyer who has refused this many recommendations we KNOW cleared their
+    # rational bar is not reading our signal. Reputation with them buys nothing,
+    # so there is nothing left to spend it on.
+    non_buyer_evidence: int = 6
 
     # --- Buyer --------------------------------------------------------------
     # Strength of the prior on seller honesty, in pseudo-observations. Low =

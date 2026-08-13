@@ -29,8 +29,15 @@ _turn_log_path: Path | None = None
 _KEEP = (
     "round", "max_rounds", "total_rounds", "horizon_known", "phase",
     "money_to_divide", "delta_1", "delta_2", "last_offer",
+    # Who proposes this round. Without it the endgame-sweep conditions cannot be
+    # reconstructed from the log at all, since the whole rule turns on parity.
+    "proposer", "current_player",
     "player_1_role", "player_2_role", "player_1_value", "player_2_value",
     "p", "v", "u", "product_price", "current_quality", "seller_message_type",
+    # The buyer's whole decision turns on this. Leaving it out made every game
+    # look like a silent seller in the logs and sent one post-mortem chasing the
+    # wrong fix; the seller had said "yes" on all twenty rounds.
+    "seller_message",
     "complete_information", "messages_allowed",
     "seller_total_payoff", "buyer_total_payoff",
 )

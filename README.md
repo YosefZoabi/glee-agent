@@ -20,7 +20,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 
-Copy-Item .env.example .env      # then paste your key into .env
+"GLEE_API_KEY=glee_your_key_here" | Out-File -Encoding utf8 .env
 python tools/check_setup.py      # proves the key works, plays nothing
 ```
 
@@ -40,6 +40,26 @@ entry still gets matched, and that game times out and dents the rating.
 
 Every turn is appended to `logs/turns-<date>.jsonl`.
 
+## Watching games
+
+There is no spectator page. The platform keeps the full transcript of every
+game — including games still in progress — on `GET /api/agent/games/{id}`, and
+[show_game.py](tools/show_game.py) renders it:
+
+```powershell
+python tools\show_game.py --list          # every game we have played
+python tools\show_game.py --list --live   # only games in progress right now
+python tools\show_game.py c8cf3c48        # full transcript; an id prefix is enough
+```
+
+That prints each offer, each message, and each accept/reject with both sides'
+payoffs — which is where a losing game explains itself. To follow a running
+session instead, tail the turn log:
+
+```powershell
+Get-Content .\logs\turns-20260813.jsonl -Wait -Tail 5
+```
+
 ## Layout
 
 | Path | What it is |
@@ -52,6 +72,7 @@ Every turn is appended to `logs/turns-<date>.jsonl`.
 | [glee_agent/gamestate.py](glee_agent/gamestate.py) | Readers over the filtered `game_state` the server sends |
 | [glee_agent/gamelog.py](glee_agent/gamelog.py) | Append-only JSONL record of every decision |
 | [tools/check_setup.py](tools/check_setup.py) | Verify key and connectivity without playing |
+| [tools/show_game.py](tools/show_game.py) | Read back any game we played, move by move |
 | [tests/](tests/) | Strategy tests against synthetic games — no network, no SDK needed |
 
 Only [main.py](main.py) and [tools/check_setup.py](tools/check_setup.py) import

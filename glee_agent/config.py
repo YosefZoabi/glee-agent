@@ -30,9 +30,10 @@ def api_key() -> str:
     key = os.environ.get("GLEE_API_KEY", "").strip()
     if not key:
         raise RuntimeError(
-            "GLEE_API_KEY is not set. Copy .env.example to .env and paste the key "
-            "from your dashboard at https://glee-competition.com/dashboard "
-            "(the key is shown once at creation; reset it there if it is lost)."
+            "GLEE_API_KEY is not set. Create a .env file next to main.py containing "
+            "one line -- GLEE_API_KEY=glee_... -- using the key from your dashboard "
+            "at https://glee-competition.com/dashboard (shown once at creation; "
+            "reset it from the agent's card if it is lost). .env is gitignored."
         )
     if not key.startswith("glee_"):
         raise RuntimeError("GLEE_API_KEY does not look like a GLEE key -- expected a 'glee_' prefix.")

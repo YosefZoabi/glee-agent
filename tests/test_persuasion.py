@@ -1,6 +1,14 @@
 import pytest
 
-from glee_agent.strategies.persuasion import _seller_recommends, lie_budget, play
+from glee_agent.params import PERSUASION as P
+from glee_agent.strategies.persuasion import (
+    _seller_recommends,
+    buyer_ignores_us,
+    buyer_threshold,
+    lie_budget,
+    play,
+    regime,
+)
 from tests.fixtures import persuasion_game, persuasion_round
 
 
@@ -37,13 +45,21 @@ class TestSeller:
         # No reputation left to protect, and the buyer has no way to retaliate.
         assert play(self._low(round_=10, total_rounds=10))["decision"] == "yes"
 
-    def test_lies_are_rationed_early(self):
-        # Deterministic per game, so the rate is measured across games.
-        rate = self._lie_rate(round_=1)
-        assert 0.0 < rate < 0.35
+    def test_will_not_lie_before_it_has_credibility_to_spend(self):
+        # With no purchases behind us the buyer has no evidence, so a lie caught
+        # on the first sale drops them under the bar with the whole game left to
+        # lose. Reputation has to be earned before it can be spent.
+        assert self._lie_rate(round_=1) == 0.0
 
     def test_lies_more_freely_as_rounds_run_out(self):
-        assert self._lie_rate(round_=8) > self._lie_rate(round_=1)
+        # Same earned record either way; only what the remaining rounds are
+        # worth differs. The margin decays with the horizon, so the endgame
+        # aggression falls out of the reputation cost rather than a fixed ramp.
+        earned = [persuasion_round(round_=r, message="yes", bought=True, quality="high")
+                  for r in range(1, 4)]
+        early = self._lie_rate(round_=2, history=earned)
+        late = self._lie_rate(round_=9, history=earned)
+        assert late > early
 
     def test_stays_under_the_budget_the_buyer_would_tolerate(self):
         assert self._lie_rate(round_=9) <= lie_budget(0.5, 60, 100, 0)
@@ -52,10 +68,10 @@ class TestSeller:
         game = self._low(round_=4)
         assert _seller_recommends(game) == _seller_recommends(game)
 
-    def _lie_rate(self, *, round_, trials=400):
+    def _lie_rate(self, *, round_, trials=400, history=None):
         recommended = 0
         for index in range(trials):
-            game = self._low(round_=round_, total_rounds=10)
+            game = self._low(round_=round_, total_rounds=10, history=history or [])
             game["game_id"] = f"game-{index}"
             recommended += _seller_recommends(game)
         return recommended / trials
@@ -71,8 +87,12 @@ class TestBuyer:
         assert play(game)["decision"] == "no"
 
     def test_stops_buying_from_a_proven_liar(self):
+        # p*v = 50 against a price of 60, so the prior does NOT clear the price
+        # and the belief is what decides. (At p=0.7 the prior alone pays +10 a
+        # round and buying stays correct however much the seller lies -- see
+        # TestBuyerPriorFloor.)
         history = [persuasion_round(round_=r, message="yes", bought=True, quality="low") for r in range(1, 5)]
-        game = persuasion_game(p=0.7, v=100, u=0, price=60, round_=5, seller_message="yes", history=history)
+        game = persuasion_game(p=0.5, v=100, u=0, price=60, round_=5, seller_message="yes", history=history)
         assert play(game)["decision"] == "no"
 
     def test_keeps_buying_from_an_honest_seller(self):
@@ -112,3 +132,251 @@ class TestBuyer:
         marginal = dict(p=0.55, v=100, u=0, price=60, seller_message="yes")
         assert play(persuasion_game(round_=1, **marginal))["decision"] == "yes"
         assert play(persuasion_game(round_=6, **marginal))["decision"] == "no"
+
+
+class TestBuyerPriorFloor:
+    """Regression: game 4ec7b241 -- bought twice, drew low twice, quit at -2,000,000.
+
+    p=1/3, v=4,000,000, price=1,000,000: the prior alone pays +333,333 a round,
+    so buying every round is +EV no matter what the seller does. The posterior
+    only updates on rounds we BUY, so two unlucky exploration draws pushed the
+    belief under the bar, which stopped us buying, which froze the belief there.
+    An absorbing state with a guaranteed-profitable alternative sitting next to it.
+    """
+
+    def _game(self, *, p, v, price, history=None, seller_message=None, round_=5):
+        return persuasion_game(
+            action_type="buyer_decision", slot="player_2",
+            p=p, v=v, u=0.0, price=price, round_=round_, total_rounds=20,
+            seller_message=seller_message, history=history or [],
+        )
+
+    def _two_bad_explorations(self):
+        return [
+            persuasion_round(round_=1, message="yes", bought=True, quality="low"),
+            persuasion_round(round_=2, message="yes", bought=True, quality="low"),
+        ]
+
+    def test_keeps_buying_when_the_prior_alone_beats_the_price(self):
+        # The exact configuration that lost 2,000,000.
+        game = self._game(p=1 / 3, v=4_000_000, price=1_000_000,
+                          history=self._two_bad_explorations())
+        assert play(game)["decision"] == "yes"
+
+    def test_a_seller_who_recommends_everything_conveys_nothing(self):
+        # The real shape of both losses: "yes" on all twenty rounds. A constant
+        # signal leaves P(high | recommended) exactly at the prior, so the floor
+        # is not a heuristic here -- it is the correct posterior.
+        game = self._game(p=1 / 3, v=4_000_000, price=1_000_000, seller_message="yes",
+                          history=self._two_bad_explorations())
+        assert play(game)["decision"] == "yes"
+
+    def test_an_explicit_warning_still_outranks_the_prior_floor(self):
+        # The observed loss came from a SILENT seller, so the floor deliberately
+        # sits below the negative signal rather than overriding it. Trusting an
+        # unverifiable "no" is a separate question -- quality is hidden on rounds
+        # we pass, so a negative can never be checked against an outcome.
+        game = self._game(p=1 / 3, v=4_000_000, price=1_000_000,
+                          seller_message="this one is not worth the price")
+        assert play(game)["decision"] == "no"
+
+    def test_the_floor_applies_when_the_seller_says_nothing(self):
+        # A genuinely silent seller cannot steer us either.
+        game = self._game(p=1 / 3, v=4_000_000, price=1_000_000, seller_message=None,
+                          history=self._two_bad_explorations())
+        assert play(game)["decision"] == "yes"
+
+    def test_bad_luck_does_not_become_permanent(self):
+        # The absorbing state: every round after the unlucky pair must still buy.
+        history = self._two_bad_explorations()
+        for round_ in range(3, 21):
+            game = self._game(p=1 / 3, v=4_000_000, price=1_000_000,
+                              history=history, round_=round_)
+            assert play(game)["decision"] == "yes", f"stopped buying at round {round_}"
+
+    def test_an_unprofitable_prior_still_respects_the_seller(self):
+        # p*v = 400,000 against a price of 1,000,000: blind buying loses here, so
+        # the floor must NOT fire and the negative signal must still be honoured.
+        game = self._game(p=1 / 3, v=1_200_000, price=1_000_000,
+                          seller_message="this one is not worth the price")
+        assert play(game)["decision"] == "no"
+
+    def test_the_floor_is_strict_not_generous(self):
+        # Exactly break-even is not profitable; the floor must not fire.
+        game = self._game(p=0.5, v=200.0, price=100.0,
+                          seller_message="this one is not worth the price")
+        assert play(game)["decision"] == "no"
+
+
+class TestSellerBudgetIsAQuota:
+    """Regression: game 2e48f9f7 -- recommended 20 of 20, sold 0, banked nothing.
+
+    p=0.80, v=1,250,000, price=1,000,000. The buyer's bar is P(high|rec) >= 0.80,
+    which is exactly the prior, so the lying budget is 1.0 and every point of
+    overshoot puts them at indifference. A per-round probability only holds on
+    average and there are about four low rounds to average over, so a 0.75 rate
+    lands on 4/4 often enough to matter. Rationing against the lows actually seen
+    keeps the realised rate near the intended one.
+    """
+
+    def _play_game(self, seed, *, p=0.8, rounds=20):
+        import random
+        rng = random.Random(seed)
+        history, lows, lies = [], 0, 0
+        for round_ in range(1, rounds + 1):
+            quality = "low" if rng.random() > p else "high"
+            game = persuasion_game(
+                action_type="seller_recommendation", slot="player_1", quality=quality,
+                p=p, v=1_250_000, u=0.0, price=1_000_000,
+                round_=round_, total_rounds=rounds, history=history,
+            )
+            game["game_id"] = f"quota-{seed}"
+            recommends = _seller_recommends(game)
+            if quality == "low":
+                lows += 1
+                lies += recommends
+            history.append(persuasion_round(
+                round_=round_, message="yes" if recommends else "no",
+                bought=True, quality=quality,
+            ))
+        return lies / lows if lows else 0.0
+
+    def test_the_realised_rate_stays_under_the_budget(self):
+        rates = [self._play_game(s) for s in range(120)]
+        mean = sum(rates) / len(rates)
+        assert mean <= lie_budget(0.8, 1_000_000, 1_250_000, 0) * P.lie_budget_use
+
+    def test_the_buyer_still_strictly_profits_at_our_rate(self):
+        # The whole point: at the realised rate the recommendation must leave
+        # them better off buying than not. Indifference is a refusal.
+        rates = [self._play_game(s) for s in range(120)]
+        mean = sum(rates) / len(rates)
+        posterior = 0.8 / (0.8 + mean * 0.2)
+        assert posterior > 1_000_000 / 1_250_000
+
+    def test_wholesale_lying_becomes_rare(self):
+        rates = [self._play_game(s) for s in range(120)]
+        assert sum(1 for r in rates if r > 0.999) / len(rates) < 0.15
+
+    def test_a_high_quality_product_is_never_talked_down(self):
+        game = persuasion_game(
+            action_type="seller_recommendation", slot="player_1", quality="high",
+            p=0.8, v=1_250_000, u=0.0, price=1_000_000, round_=9, total_rounds=20,
+            history=[persuasion_round(round_=r, message="yes", bought=True, quality="low")
+                     for r in range(1, 9)],
+        )
+        assert _seller_recommends(game) is True
+
+
+class TestRegimeAndNonBuyer:
+    """The two structural questions to ask before choosing any message.
+
+    Which persuasion problem is this -- can the buyer profit on the prior alone,
+    can they profit at all -- and is this particular buyer even reading us.
+    Observed in 9 of 25 seller games: recommendations that genuinely cleared the
+    buyer's bar, four of them with a perfect record, refused for twenty rounds.
+    """
+
+    def test_classifies_the_four_markets(self):
+        assert regime(0.5, 40, 100, 50) == "free"          # price under the dud value
+        assert regime(0.5, 120, 100, 0) == "impossible"    # price over the good value
+        assert regime(0.9, 60, 100, 0) == "easy"           # prior alone clears the bar
+        assert regime(0.3, 60, 100, 0) == "hard"           # information required
+
+    def test_the_knife_edge_counts_as_hard(self):
+        # p exactly at tau leaves the buyer indifferent if we pool, and an
+        # indifferent buyer walks. This is the config that sold 0 of 20.
+        assert buyer_threshold(1_000_000, 1_250_000, 0) == pytest.approx(0.8)
+        assert regime(0.8, 1_000_000, 1_250_000, 0) == "hard"
+
+    def test_an_easy_market_recommends_everything(self):
+        game = persuasion_game(
+            action_type="seller_recommendation", slot="player_1", quality="low",
+            p=0.9, v=100, u=0.0, price=60, round_=3, total_rounds=20,
+        )
+        assert _seller_recommends(game) is True
+
+    def test_an_impossible_market_costs_nothing_to_push(self):
+        # No posterior clears the bar, so honesty buys us no future sale either.
+        game = persuasion_game(
+            action_type="seller_recommendation", slot="player_1", quality="low",
+            p=0.5, v=100, u=0.0, price=120, round_=3, total_rounds=20,
+        )
+        assert _seller_recommends(game) is True
+
+    def _ignored(self, *, recommends, bought, quality="high"):
+        # Seller-visible history: we see the quality of every round, bought or
+        # not. `persuasion_round` models the BUYER's view, where a pass reveals
+        # nothing, so it is the wrong builder for a seller-side test.
+        return [
+            {
+                "round": r, "seller_message": "yes", "quality": quality,
+                "buyer_decision": "yes" if bought else "no", "bought": bought,
+                "seller_payoff": 0, "buyer_payoff": 0,
+            }
+            for r in range(1, recommends + 1)
+        ]
+
+    def test_detects_a_buyer_who_ignores_a_perfect_signal(self):
+        game = persuasion_game(
+            action_type="seller_recommendation", slot="player_1", quality="low",
+            p=0.3, v=100, u=0.0, price=60, round_=9, total_rounds=20,
+            history=self._ignored(recommends=8, bought=False),
+        )
+        assert buyer_ignores_us(game) is True
+        # Reputation with them will never be spent, so stop funding it.
+        assert _seller_recommends(game) is True
+
+    def test_a_buyer_who_bought_is_not_ignoring_us(self):
+        game = persuasion_game(
+            action_type="seller_recommendation", slot="player_1", quality="low",
+            p=0.3, v=100, u=0.0, price=60, round_=9, total_rounds=20,
+            history=self._ignored(recommends=8, bought=True),
+        )
+        assert buyer_ignores_us(game) is False
+
+    def test_patience_before_writing_a_buyer_off(self):
+        # Two refusals is not evidence; it takes a real run of them.
+        game = persuasion_game(
+            action_type="seller_recommendation", slot="player_1", quality="low",
+            p=0.3, v=100, u=0.0, price=60, round_=3, total_rounds=20,
+            history=self._ignored(recommends=2, bought=False),
+        )
+        assert buyer_ignores_us(game) is False
+
+    def test_refusals_of_a_weak_signal_do_not_count(self):
+        # If our own record was below their bar, they were right to refuse and
+        # the fault is ours -- that is not a buyer who ignores information.
+        game = persuasion_game(
+            action_type="seller_recommendation", slot="player_1", quality="low",
+            p=0.3, v=100, u=0.0, price=60, round_=9, total_rounds=20,
+            history=self._ignored(recommends=8, bought=False, quality="low"),
+        )
+        assert buyer_ignores_us(game) is False
+
+
+class TestSellerMessageCarriesEvidence:
+    def test_states_the_verifiable_record(self):
+        history = [persuasion_round(round_=r, message="yes", bought=True, quality="high")
+                   for r in range(1, 6)]
+        game = persuasion_game(
+            action_type="seller_message", slot="player_1", quality="high",
+            p=0.9, v=125, u=0.0, price=100, round_=6, total_rounds=20, history=history,
+        )
+        message = play(game)["message"]
+        assert "5 of my 5" in message
+
+    def test_gives_the_buyer_their_own_arithmetic(self):
+        game = persuasion_game(
+            action_type="seller_message", slot="player_1", quality="high",
+            p=0.9, v=125, u=0.0, price=100, round_=1, total_rounds=20,
+        )
+        message = play(game)["message"]
+        assert "125" in message and "100" in message and "25" in message
+
+    def test_a_refusal_is_still_plainly_a_refusal(self):
+        game = persuasion_game(
+            action_type="seller_message", slot="player_1", quality="low",
+            p=0.3, v=100, u=0.0, price=60, round_=2, total_rounds=20,
+        )
+        assert "not worth" in play(game)["message"]

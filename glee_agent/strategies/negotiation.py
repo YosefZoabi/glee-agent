@@ -63,7 +63,10 @@ def _target_price(state: dict, slot: str, role: str) -> float:
     """The price we are holding out for this round."""
     my_value = number(state, f"{slot}_value", 0.0) or 0.0
     opponent_value = number(state, f"{OPPOSITE[slot]}_value", None)
-    t = progress(state, P.unbounded_soft_horizon)
+    # On the final round there is no schedule left to run: this price is the
+    # last word, and rejecting it pays $0. A one-round game is final on round 1,
+    # where `progress` is still 0 -- so ask the horizon, not the clock.
+    t = 1.0 if is_final_round(state) else progress(state, P.unbounded_soft_horizon)
 
     if opponent_value is not None:
         # Known zone of agreement: open just inside their limit, concede to the

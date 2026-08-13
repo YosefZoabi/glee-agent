@@ -1,5 +1,6 @@
 import pytest
 
+from glee_agent.params import NEGOTIATION as P
 from glee_agent.strategies.negotiation import play
 from tests.fixtures import negotiation_game
 
@@ -77,3 +78,46 @@ class TestDecisions:
             if price is None:
                 continue
             assert price >= my_value if slot == "player_1" else price <= my_value
+
+
+class TestTakeItOrLeaveIt:
+    """Regression: game 65487191, a 1-round game, opened at 1.9x value and paid $0.
+
+    `progress` is (round - 1) / horizon, so round 1 of a 1-round game scores 0 --
+    the very start of the concession schedule -- even though it is also the last
+    word. The horizon, not the clock, has to decide.
+    """
+
+    def test_single_round_seller_prices_to_be_accepted(self):
+        action = play(negotiation_game(slot="player_1", my_value=80, round_=1, max_rounds=1))
+        # The floor multiple, not the 1.9x opening anchor that lost the game.
+        assert action["product_price"] < 80 * P.seller_open_multiple
+        assert action["product_price"] == pytest.approx(80 * P.seller_floor_multiple)
+
+    def test_single_round_buyer_prices_to_be_accepted(self):
+        action = play(negotiation_game(slot="player_2", my_value=100, round_=1, max_rounds=1))
+        assert action["product_price"] > 100 * P.buyer_open_multiple
+        assert action["product_price"] == pytest.approx(100 * P.buyer_floor_multiple)
+
+    def test_single_round_offer_is_still_profitable(self):
+        seller = play(negotiation_game(slot="player_1", my_value=80, round_=1, max_rounds=1))
+        assert seller["product_price"] > 80
+        buyer = play(negotiation_game(slot="player_2", my_value=100, round_=1, max_rounds=1))
+        assert buyer["product_price"] < 100
+
+    def test_final_round_of_a_long_game_prices_the_same_way(self):
+        # Not a special case for max_rounds == 1: any last word is a last word.
+        action = play(negotiation_game(slot="player_1", my_value=80, round_=6, max_rounds=6))
+        assert action["product_price"] == pytest.approx(80 * P.seller_floor_multiple)
+
+    def test_a_real_horizon_still_opens_high(self):
+        # The fix must not flatten the schedule everywhere.
+        action = play(negotiation_game(slot="player_1", my_value=80, round_=1, max_rounds=6))
+        assert action["product_price"] > 80 * 1.5
+
+    def test_single_round_complete_information_splits_the_zone(self):
+        action = play(
+            negotiation_game(slot="player_1", my_value=40, opponent_value=100, round_=1, max_rounds=1)
+        )
+        # No rounds left to shade toward: take the midpoint, which they will sign.
+        assert action["product_price"] == pytest.approx(70.0)

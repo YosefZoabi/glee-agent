@@ -32,6 +32,7 @@ from __future__ import annotations
 from ..gamestate import (
     OPPOSITE,
     clamp,
+    history,
     is_final_round,
     me as my_slot,
     messages_allowed,
@@ -61,7 +62,13 @@ def proposer_share(delta_me: float, delta_opp: float, rounds_left_: int | None) 
     if rounds_left_ is None or rounds_left_ > _EXACT_RECURSION_LIMIT:
         denominator = 1.0 - delta_me * delta_opp
         if denominator <= 1e-9:
-            return 1.0
+            # Neither side pays anything for delay (delta 1.0, which is a third
+            # of the observed grid), so neither has bargaining power and the
+            # model has no unique solution -- every split is an equilibrium.
+            # Reading that as "we take everything" deadlocks the game, and a
+            # no-deal pays $0. With no asymmetry the symmetric split is the only
+            # defensible focal point.
+            return 0.5
         return clamp((1.0 - delta_opp) / denominator, 0.0, 1.0)
     if rounds_left_ <= 1:
         return 1.0
@@ -88,14 +95,130 @@ def _deltas(state: dict, slot: str) -> tuple[float, float]:
 def _continuation_value(state: dict, slot: str) -> float:
     """Our share of the pot, in today's dollars, if we reject and counter.
 
-    Rejecting costs us one round of inflation and hands us the proposer's seat
-    for whatever rounds remain. On the final round it is worth nothing, which is
-    what makes accepting a bad last offer correct.
+    Rejecting hands us the proposer's seat for whatever rounds remain, but not
+    immediately: the field does not accept our counter on the spot, so the price
+    of rejecting is `rounds_to_settle` rounds of our own inflation, not one.
+    Charging only one round overvalues holding out, and the more impatient we
+    are the worse that error gets -- which is exactly when it is most expensive.
+    On the final round rejecting is worth nothing, which is what makes accepting
+    a bad last offer correct.
     """
     if is_final_round(state):
         return 0.0
     delta_me, delta_opp = _deltas(state, slot)
-    return delta_me * proposer_share(delta_me, delta_opp, None)
+    patience = delta_me ** max(1, P.rounds_to_settle)
+    # Capped: an uncapped share of 1.0 becomes "accept nothing below 97%", which
+    # is how we rejected 72% of a 1,000,000 pot forty-nine times and banked $0.
+    share = min(proposer_share(delta_me, delta_opp, None), P.never_demand_above)
+    return patience * share
+
+
+def _final_round_is_ours(state: dict, slot: str) -> bool:
+    """True when the last proposal of the game is ours to make.
+
+    Proposers alternate, so the parity of the gap to the horizon decides it.
+    Read off the live `proposer` rather than assuming player_1 opens.
+    """
+    if not state.get("horizon_known", False):
+        return False
+    max_rounds = number(state, "max_rounds", None)
+    current = number(state, "round", None)
+    proposer = state.get("proposer")
+    if max_rounds is None or current is None or proposer not in OPPOSITE:
+        return False
+    gap = int(max_rounds) - int(current)
+    if gap < 0:
+        return False
+    last = proposer if gap % 2 == 0 else OPPOSITE[proposer]
+    return last == slot
+
+
+def endgame_sweep(state: dict, slot: str) -> bool:
+    """Should we stall to the final round and take nearly the whole pot?
+
+    Only when both halves hold. Our inflation must be nil, so waiting is free
+    and every round we burn costs us nothing. And the last proposal must be
+    ours, because a responder facing the final offer is choosing between it and
+    $0 -- which is what makes an almost-total demand signable.
+
+    Lose either half and this is a bad idea: with real inflation, stalling burns
+    the pot we are stalling for, and if the last word is theirs we arrive at the
+    end as the responder with nothing to threaten them with.
+    """
+    delta_me, _ = _deltas(state, slot)
+    return delta_me >= P.costless_delay_delta and _final_round_is_ours(state, slot)
+
+
+def opponent_is_sweeping(game: dict, slot: str) -> bool:
+    """Are they running the endgame sweep on us?
+
+    Structural half: the last proposal is theirs, so at the end we choose
+    between their token and $0, and they know it. Behavioural half: they have
+    refused several of our offers while never putting a real share on the table.
+
+    Both halves are needed. Owning the endgame is not proof anyone is exploiting
+    it -- most opponents negotiate normally regardless of parity -- and being
+    stubborn is not proof either. Believing it too readily is worse than missing
+    it: the response is to bank crumbs, which is a catastrophe against someone
+    who was about to concede.
+    """
+    state = game["game_state"]
+    if _final_round_is_ours(state, slot) or not state.get("horizon_known", False):
+        return False
+
+    pot = number(state, "money_to_divide", 0.0) or 0.0
+    if pot <= 0:
+        return False
+
+    refusals, best_offered = 0, 0.0
+    for entry in history(game):
+        offer = entry.get("offer") or {}
+        proposer = entry.get("proposer") or offer.get("proposer")
+        decision = str(entry.get("decision") or "").lower()
+        if proposer == slot and decision.startswith("rej"):
+            refusals += 1
+        elif proposer == OPPOSITE[slot]:
+            best_offered = max(best_offered, number(offer, f"{slot}_gain", 0.0) or 0.0)
+
+    return (
+        refusals >= P.sweep_evidence_rounds
+        and best_offered <= pot * P.sweep_evidence_ceiling
+    )
+
+
+def _swept_endgame_value(state: dict, slot: str, pot: float) -> float:
+    """What we actually collect if we let a sweeper run the clock out.
+
+    Their final offer leaves us a token, and we take it because the alternative
+    is $0. Discounted by our own inflation over the rounds it takes to arrive.
+    """
+    delta_me, _ = _deltas(state, slot)
+    left = rounds_left(state, P.unbounded_soft_horizon) or 1
+    return pot * P.min_opponent_share * (delta_me ** max(0, left - 1))
+
+
+def stonewall_threshold(state: dict, slot: str) -> float:
+    """Share of the pot worth signing, against an opponent who will not move.
+
+    The equilibrium continuation prices rejection as "they concede next round".
+    Measured over 55 games, they do not: their offers drifted a median +0.5%
+    from first to last however long we waited, and our counters were accepted
+    15% of the time at best. So rejecting is really a small chance our counter
+    lands, and otherwise the same offer again two rounds poorer:
+
+        reject == p*D*delta + (1 - p) * X * delta**2
+
+    Solving for the X where accepting ties gives the bar below. It rises with
+    patience, which is the right shape -- a player who pays nothing for delay
+    can afford to wait, and one bleeding 20% a round cannot.
+    """
+    delta_me, _ = _deltas(state, slot)
+    p = clamp(P.counter_success_rate, 0.0, 1.0)
+    demand = P.realistic_counter_share
+    denominator = 1.0 - (1.0 - p) * delta_me ** 2
+    if denominator <= 1e-9:
+        return demand
+    return clamp(p * demand * delta_me / denominator, 0.0, 1.0)
 
 
 def _make_offer(game: dict) -> dict:
@@ -107,8 +230,12 @@ def _make_offer(game: dict) -> dict:
     left = rounds_left(state, P.unbounded_soft_horizon)
     # The equilibrium share is a floor to protect, not an opening bid to
     # announce -- and never a reason to concede past what the field will sign.
-    floor = max(proposer_share(delta_me, delta_opp, None), P.never_concede_below)
-    opening = max(P.opening_demand, floor)
+    floor = clamp(proposer_share(delta_me, delta_opp, None), P.never_concede_below, P.never_demand_above)
+    # A high opening buys a long haggle, and an impatient player cannot afford
+    # one: every round of it costs us `1 - delta_me` of whatever we finally win.
+    # So the more our own clock hurts, the closer we open to the floor.
+    patience = delta_me ** max(1, P.rounds_to_settle)
+    opening = floor + (max(P.opening_demand, floor) - floor) * patience
     weight = (1.0 - progress(state, P.unbounded_soft_horizon)) ** P.concession_exponent
     demand = floor + (opening - floor) * weight
 
@@ -116,6 +243,11 @@ def _make_offer(game: dict) -> dict:
         if left <= 1:
             # We hold the last word: rejecting pays the responder $0, so this is
             # the one round where taking most of the pot is also acceptable.
+            demand = P.final_round_demand
+        elif endgame_sweep(state, slot):
+            # Waiting is free and the last word is ours, so these earlier offers
+            # are not attempts to close -- they cost nothing to make and are pure
+            # upside if taken. Ask for what we intend to take at the end.
             demand = P.final_round_demand
         elif left <= P.endgame_rounds:
             # They hold the last word. Make an offer worth signing.
@@ -129,6 +261,16 @@ def _make_offer(game: dict) -> dict:
         action = {"alice_gain": theirs, "bob_gain": mine}
     if messages_allowed(game):
         action["message"] = _offer_message(state, demand)
+        if opponent_is_sweeping(game, slot):
+            # We cannot actually punish them -- walking away pays us $0 too, and
+            # at the end we will take their token rather than nothing. But the
+            # threat is free to make and the rules permit it, and an opponent who
+            # believes it has to weigh the whole pot against waiting us out.
+            action["message"] = (
+                "You are running the clock down to make me take scraps at the end. "
+                "I would rather book nothing than sign that, and nothing is what "
+                "we both get. This offer is open now."
+            )
     return action
 
 
@@ -139,16 +281,42 @@ def _make_decision(game: dict) -> dict:
     offer = state.get("last_offer") or {}
     my_gain = number(offer, f"{slot}_gain", 0.0) or 0.0
 
-    # Hold out for the better of what theory says rejecting is worth and what
-    # the field will usually agree to -- the equilibrium continuation collapses
-    # to single digits on some horizon parities, which is not a real offer.
-    threshold = max(
-        money * _continuation_value(state, slot) * P.accept_slack,
-        money * P.min_accept_share,
-    )
+    if endgame_sweep(state, slot):
+        # Delay is free and the final proposal is ours, where their alternative
+        # to signing is $0. Nothing on the table before then is worth taking
+        # unless it already beats what we intend to demand at the end.
+        if my_gain >= money * P.final_round_demand:
+            return {"decision": "accept"}
+        return {"decision": "reject"}
+
+    if opponent_is_sweeping(game, slot):
+        # The mirror image, from the losing side. Once they hold the last word
+        # and have shown they will not trade for it, the fair split we are
+        # holding out for is not on offer and never was -- our real choice is
+        # between what is on the table now and the token they hand us at the
+        # end. Take anything clearly better than that token.
+        if my_gain >= _swept_endgame_value(state, slot, money) * P.sweep_accept_margin:
+            return {"decision": "accept"}
+        return {"decision": "reject"}
+
+    # What rejecting is actually worth against this field -- see
+    # `stonewall_threshold`. The equilibrium continuation is the theoretical
+    # reference and stays available in `_continuation_value`, but pricing
+    # rejection as "they concede next round" is what had us grinding games we
+    # should have signed: 32.5% of the nominal split lost to delay.
+    threshold = money * stonewall_threshold(state, slot)
 
     left = rounds_left(state, P.unbounded_soft_horizon)
-    if left is not None and left <= P.endgame_rounds:
+    if left is None:
+        # Open-ended game: no final round will ever arrive to force our hand, so
+        # a threshold we hold forever is a threshold that pays $0. Observed: 50
+        # consecutive rejections of a standing 65% offer, game still going at
+        # round 99. Walk the bar down over the soft horizon until a real offer
+        # clears it -- the opponent's patience is not evidence they will move.
+        threshold += (money * P.min_accept_share - threshold) * progress(
+            state, P.unbounded_soft_horizon
+        )
+    elif left <= P.endgame_rounds:
         # Out of road: a live offer beats the $0 that running out of rounds pays.
         threshold = min(threshold, money * P.endgame_floor)
     if is_final_round(state):

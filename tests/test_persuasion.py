@@ -5,6 +5,7 @@ from glee_agent.strategies.persuasion import (
     _seller_recommends,
     buyer_ignores_us,
     buyer_threshold,
+    estimate_threshold,
     lie_budget,
     play,
     regime,
@@ -380,3 +381,86 @@ class TestSellerMessageCarriesEvidence:
             p=0.3, v=100, u=0.0, price=60, round_=2, total_rounds=20,
         )
         assert "not worth" in play(game)["message"]
+
+
+class TestUnknownBuyerValue:
+    """More than half our seller games never disclose the buyer's value.
+
+    Without `tau` every rule built on it goes dark, and those games had the
+    worst sale rate of any regime -- 15% of rounds bought against 100% in the
+    easy regime. But the buyer brackets `tau` themselves: buying at credibility
+    c proves tau <= c, refusing proves tau > c. No posterior over v required.
+    """
+
+    def _round(self, *, round_, recommend, bought, quality="high"):
+        return {
+            "round": round_, "seller_message": "yes" if recommend else "no",
+            "quality": quality, "buyer_decision": "yes" if bought else "no",
+            "bought": bought, "seller_payoff": 0, "buyer_payoff": 0,
+        }
+
+    def _game(self, history, *, round_=9, p=0.5):
+        # v and u absent: exactly what the platform sends in these games.
+        game = persuasion_game(
+            action_type="seller_recommendation", slot="player_1", quality="low",
+            p=p, price=100, round_=round_, total_rounds=20, history=history,
+            seller_knows_values=False,
+        )
+        game["game_state"].pop("v", None)
+        game["game_state"].pop("u", None)
+        return game
+
+    def test_a_purchase_puts_a_ceiling_on_their_bar(self):
+        history = [self._round(round_=1, recommend=True, bought=True)]
+        _lower, upper = estimate_threshold(self._game(history), 0.5)
+        assert upper <= 0.5      # they bought at the prior, so tau is no higher
+
+    def test_a_refusal_puts_a_floor_under_it(self):
+        history = [self._round(round_=1, recommend=True, bought=False)]
+        lower, upper = estimate_threshold(self._game(history), 0.5)
+        assert lower >= 0.5 and upper == 1.0
+
+    def test_the_bracket_narrows_as_they_answer(self):
+        history = [
+            self._round(round_=1, recommend=True, bought=False),
+            self._round(round_=2, recommend=True, bought=True),
+            self._round(round_=3, recommend=True, bought=True),
+        ]
+        lower, upper = estimate_threshold(self._game(history), 0.5)
+        assert 0.0 < lower <= upper < 1.0
+
+    def test_stays_honest_until_they_have_bought_something(self):
+        # No ceiling on what they need, so the only lever is being believable.
+        history = [self._round(round_=r, recommend=True, bought=False) for r in (1, 2)]
+        assert _seller_recommends(self._game(history)) is False
+
+    def test_spends_credibility_once_the_bar_is_known(self):
+        # Bought repeatedly at a low bar, and our record is strong: there is
+        # headroom above what they have shown they need.
+        history = [self._round(round_=r, recommend=True, bought=True) for r in range(1, 9)]
+        assert _seller_recommends(self._game(history, round_=18)) is True
+
+    def test_writes_off_a_buyer_who_never_takes_anything(self):
+        history = [self._round(round_=r, recommend=True, bought=False) for r in range(1, 9)]
+        assert _seller_recommends(self._game(history)) is True
+
+    def test_an_inconsistent_buyer_has_no_bar_to_respect(self):
+        # Bought on weak evidence, refused later on stronger evidence.
+        history = [
+            self._round(round_=1, recommend=True, bought=True, quality="low"),
+            self._round(round_=2, recommend=True, bought=True),
+            self._round(round_=3, recommend=True, bought=True),
+            self._round(round_=4, recommend=True, bought=False),
+        ]
+        lower, upper = estimate_threshold(self._game(history), 0.5)
+        assert lower > upper
+        assert _seller_recommends(self._game(history)) is True
+
+    def test_a_known_value_game_is_untouched(self):
+        # The bracket is only for the blind case; disclosed values still rule.
+        game = persuasion_game(
+            action_type="seller_recommendation", slot="player_1", quality="low",
+            p=0.9, v=100, u=0.0, price=60, round_=3, total_rounds=20,
+        )
+        assert regime(0.9, 60, 100, 0.0) == "easy"
+        assert _seller_recommends(game) is True

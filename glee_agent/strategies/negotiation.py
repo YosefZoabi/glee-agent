@@ -59,6 +59,36 @@ def _scale(state: dict, my_value: float | None) -> float:
     return P.default_scale
 
 
+def _their_prices(state: dict, slot: str) -> list[float]:
+    """Every price they have put to us, oldest first."""
+    by_round: dict[int, float] = {}
+    for entry in list(state.get("history") or []) + [{"offer": state.get("last_offer") or {}}]:
+        offer = entry.get("offer") or {}
+        sender = offer.get("from_player")
+        if not sender or sender == slot:
+            continue
+        price = number(offer, "price", None)
+        if price is not None:
+            by_round[int(offer.get("round") or entry.get("round") or 0)] = price
+    return [by_round[r] for r in sorted(by_round)]
+
+
+def opponent_has_stopped_moving(state: dict, slot: str) -> bool:
+    """Has their price been literally unchanged for `stonewall_offers` offers?
+
+    Not "barely moving" -- unchanged to the cent. Games 85bd702f and 3ee13da4
+    are the same configuration, the same opening, and the same 900,000 hold by
+    us, and they end 0 and 100,000. The only thing that separates them is that
+    one buyer sat on 815,000 from round 2 to round 99 while the other crept
+    806,000 -> 810,937 and then paid our price at round 69. A tolerance wide
+    enough to call the second one flat would have sold that game for 10,937.
+    """
+    prices = _their_prices(state, slot)
+    if len(prices) < P.stonewall_offers:
+        return False
+    return len(set(prices[-P.stonewall_offers:])) == 1
+
+
 def _target_price(state: dict, slot: str, role: str) -> float:
     """The price we are holding out for this round."""
     my_value = number(state, f"{slot}_value", 0.0) or 0.0
@@ -161,6 +191,14 @@ def _make_decision(game: dict) -> dict:
         if final:
             # No counteroffer exists on the last round; rejecting ends the game.
             return {"decision": "RejectOffer"}
+
+    # An open-ended game never runs out of road, so a standing offer can be
+    # refused forever. 85bd702f: their 815,000 was worth 15,000 to us and we
+    # turned it down forty-nine times while they never moved a cent, and the
+    # game ended 0-0 at the round cap. Once they have visibly stopped
+    # negotiating, what is on the table is the whole of what is on offer.
+    if gain > 0 and opponent_has_stopped_moving(state, slot):
+        return {"decision": "AcceptOffer"}
 
     target = _target_price(state, slot, role)
     if gain >= _profit(role, target, my_value) * P.accept_slack:

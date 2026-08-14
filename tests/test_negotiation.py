@@ -121,3 +121,77 @@ class TestTakeItOrLeaveIt:
         )
         # No rounds left to shade toward: take the midpoint, which they will sign.
         assert action["product_price"] == pytest.approx(70.0)
+
+
+class TestAStandingOfferFromSomeoneWhoHasStoppedNegotiating:
+    """Regression: 85bd702f, an open-ended game we ground to 0-0 at round 99.
+
+    Our cost 800,000, their value 1,000,000. They offered 815,000 -- worth
+    15,000 to us -- in round 2 and then repeated it, to the cent, forty-nine
+    times. We held 900,000 just as long, and the round cap paid us both nothing.
+    A bounded game has the endgame rule to stop this; an open-ended one never
+    runs out of road, so the stopping condition has to come from them.
+
+    The bar is deliberately "unchanged to the cent". 3ee13da4 is the same
+    configuration, the same opening and the same 900,000 hold by us, and it paid
+    100,000 -- because that buyer crept 806,000 -> 810,937 and then signed our
+    price at round 69. Replayed over every negotiation game we have, a
+    six-offer bar rescues the first and costs nothing on the second; a
+    three-offer bar sells twelve won games for a third of what they paid.
+    """
+
+    def _game(self, price, repeats, **kwargs):
+        history = [
+            {"round": r, "offer": {"price": price, "from_player": "player_2", "round": r},
+             "decision": "RejectOffer", "decided_by": "player_1"}
+            for r in range(1, repeats + 1)
+        ]
+        return negotiation_game(
+            action_type="decision", slot="player_1", my_value=800_000,
+            round_=repeats + 1, max_rounds=None, history=history,
+            last_offer={"price": price, "from_player": "player_2", "round": repeats + 1},
+            **kwargs,
+        )
+
+    def test_takes_the_offer_once_they_have_stopped_moving(self):
+        assert play(self._game(815_000, 8))["decision"] == "AcceptOffer"
+
+    def test_holds_out_while_they_are_still_moving(self):
+        # One cent of movement is still movement: this is the 3ee13da4 shape,
+        # and holding out is what paid 100,000 there.
+        creeping = [
+            {"round": r, "offer": {"price": 806_000 + r * 500, "from_player": "player_2", "round": r},
+             "decision": "RejectOffer", "decided_by": "player_1"}
+            for r in range(1, 9)
+        ]
+        game = negotiation_game(
+            action_type="decision", slot="player_1", my_value=800_000,
+            round_=9, max_rounds=None, history=creeping,
+            last_offer={"price": 810_500, "from_player": "player_2", "round": 9},
+        )
+        assert play(game)["decision"] == "RejectOffer"
+
+    def test_a_short_run_of_repeats_is_not_enough(self):
+        assert play(self._game(815_000, 2))["decision"] == "RejectOffer"
+
+    def test_never_takes_a_stonewalled_offer_that_loses_money(self):
+        # They can repeat 790,000 as long as they like; it is still below cost.
+        assert play(self._game(790_000, 20))["decision"] == "RejectOffer"
+
+    def test_zero_profit_is_not_positive_profit(self):
+        # Their price parked exactly on our valuation pays the same as walking.
+        assert play(self._game(800_000, 20))["decision"] == "RejectOffer"
+
+    def test_our_own_repeated_price_does_not_count_as_theirs(self):
+        # We were repeating 900,000 just as stubbornly; only their side counts.
+        ours = [
+            {"round": r, "offer": {"price": 900_000, "from_player": "player_1", "round": r},
+             "decision": "RejectOffer", "decided_by": "player_2"}
+            for r in range(1, 12)
+        ]
+        game = negotiation_game(
+            action_type="decision", slot="player_1", my_value=800_000,
+            round_=12, max_rounds=None, history=ours,
+            last_offer={"price": 815_000, "from_player": "player_2", "round": 12},
+        )
+        assert play(game)["decision"] == "RejectOffer"

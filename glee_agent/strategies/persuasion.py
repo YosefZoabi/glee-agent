@@ -180,6 +180,73 @@ def buyer_ignores_us(game: dict) -> bool:
     return posterior >= buyer_threshold(price, v, u)
 
 
+def estimate_threshold(game: dict, p: float) -> tuple[float, float]:
+    """Bracket the buyer's `tau` from their own decisions, when we are not told it.
+
+    More than half our seller games never reveal the buyer's value, so `tau` is
+    unknown and every rule built on it goes dark -- those games had the worst
+    sale rate of any regime. But the buyer brackets it for us each round they
+    answer a recommendation: buying at credibility `c` proves `tau <= c`, and
+    refusing proves `tau > c`. That needs no posterior over `v`, just the
+    interval their answers have already narrowed.
+
+    Returns (lower, upper). An upper of 1.0 means they have never bought, so we
+    know only that our credibility has not yet been enough.
+    """
+    weight = P.belief_prior_weight
+    lower, upper = 0.0, 1.0
+    seen = kept = 0
+    for entry in history(game):
+        # Their belief going INTO this round -- what they judged the offer on.
+        credibility = (p * weight + kept) / (weight + seen)
+        if _is_positive(entry.get("seller_message")):
+            if entry.get("bought"):
+                upper = min(upper, credibility)
+            else:
+                lower = max(lower, credibility)
+        # Quality is revealed to them only by a purchase, so only that updates
+        # the evidence they are reasoning from.
+        if entry.get("bought"):
+            seen += 1
+            if str(entry.get("quality") or "").lower() == "high":
+                kept += 1
+    return lower, upper
+
+
+def _blind_recommends(game: dict, p: float, round_number: int, total_rounds: int) -> bool:
+    """Low-quality decision when the buyer's value was never disclosed."""
+    lower, upper = estimate_threshold(game, p)
+    if upper >= 1.0:
+        recommended, _delivered, bought = _recommendation_record(game)
+        if not bought and recommended >= P.non_buyer_evidence:
+            # A long run of recommendations, none taken. Whatever their bar is,
+            # we have not cleared it and staying honest has not moved them --
+            # so the credibility we are protecting will never be spent.
+            return True
+        # Otherwise they have simply not bought YET. We have no ceiling on what
+        # they need, and the only lever we have is to be worth believing.
+        return False
+    if lower > upper:
+        # Bought at one credibility and refused at a higher one: not reading the
+        # signal on its merits, so there is no threshold to respect.
+        return True
+    if p > upper:
+        # Their own prior clears the bar they have shown us; silence only costs
+        # us the sale.
+        return True
+
+    # Otherwise hold credibility above the bracketed bar, with the same margin
+    # that decays as the remaining rounds lose value.
+    weight = P.belief_prior_weight
+    credibility, seen = _buyer_visible_credibility(game, p)
+    posterior_if_caught = (credibility * (weight + seen)) / (weight + seen + 1)
+    remaining = max(0, total_rounds - round_number)
+    margin = P.credibility_margin * (remaining / max(1, total_rounds - 1))
+    if posterior_if_caught < upper + margin:
+        return False
+    return _rng_unit(game.get("game_id"), round_number) < P.blind_lie_rate
+
+
 def _seller_recommends(game: dict) -> bool:
     state = game["game_state"]
     quality = str(state.get("current_quality") or "").lower()
@@ -207,7 +274,7 @@ def _seller_recommends(game: dict) -> bool:
         # them is an asset that will never be spent, so stop funding it.
         return True
     if market == "unknown":
-        return _rng_unit(game.get("game_id"), round_number) < P.blind_lie_rate
+        return _blind_recommends(game, p, round_number, total_rounds)
 
     # Hard market: credibility is the whole game. Recommending this low product
     # is worth it only when the immediate sale outweighs the reputation it costs

@@ -124,6 +124,15 @@ class NegotiationParams:
     # offered yet, so no other number in the state can set the scale.
     default_scale: float = 100.0
 
+    # Identical prices in a row before we read the opponent as done negotiating
+    # and take what is on the table. Replayed over every negotiation game we
+    # have: at 6 it rescues the one open-ended game we ground to a 0-0 at the
+    # round cap and costs nothing anywhere else, and it still costs nothing all
+    # the way out to 12 -- so this sits on a plateau rather than on an edge.
+    # Do not lower it to 3: that sells twelve won games for a third of what
+    # they paid, because "moving slowly" and "not moving" are different things.
+    stonewall_offers: int = 6
+
 
 @dataclass(frozen=True)
 class PersuasionParams:

@@ -39,7 +39,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--max-games",
         type=int,
         default=None,
-        help="Stop starting new games after this many complete. In-flight games still finish.",
+        help="Play about this many games, then stop (overshoot bounded by one slice).",
     )
     parser.add_argument(
         "--max-time",
@@ -50,6 +50,62 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--poll-interval", type=float, default=2.0, help="Seconds between polls.")
     parser.add_argument("--log-level", default="INFO", help="DEBUG, INFO, WARNING, ...")
     return parser.parse_args(argv)
+
+
+def play_exactly(client, strategy, *, families, target, concurrency, poll_interval,
+                 slice_seconds=180.0):
+    """Play about `target` games and stop, rather than four times that many.
+
+    `run(max_games=N)` counts games as they COMPLETE, and its counter only
+    advances for games that end on our own move -- one the opponent closes never
+    increments it. So the cap fires late while the top-up keeps queueing: asking
+    for 60 negotiation games started 119 of them. Equal-sized batches are the
+    whole basis of comparing one tuning change against another, so we count
+    games ourselves, from the dispatcher, where every game is seen exactly once.
+
+    Stopping is the hard part, because `run()` has exactly two ways to return:
+    a `max_games` or `max_time` limit is reached, at which point it leaves the
+    queue and drains the games already in flight. There is no third one worth
+    using -- `requeue=False` does not end the run, it only stops the top-up, so
+    the loop polls an empty queue forever (observed: three games, then 74 idle
+    minutes). Raising out of the strategy does escape, but it abandons the
+    in-flight games into turn timeouts, and three of those buys a 30-minute
+    crash-loop ban.
+
+    So the run is cut into timed slices. Each `run()` call drains cleanly, we
+    check our own count between slices, and the overshoot is bounded by however
+    many games start inside one slice rather than being unbounded. The slice
+    shrinks as the target approaches, so the last one overshoots least.
+
+    Returns the number of distinct games actually played.
+    """
+    seen: set[str] = set()
+
+    def counting(game: dict) -> dict:
+        seen.add(game.get("game_id"))
+        return strategy(game)
+
+    while len(seen) < target:
+        before = len(seen)
+        remaining = target - len(seen)
+        client.run(
+            counting,
+            game_families=families,
+            concurrency=max(1, min(concurrency, remaining)),
+            poll_interval=poll_interval,
+            # A short slice near the end keeps the last batch from running past
+            # the target; a long one early keeps the per-slice drain overhead
+            # off the throughput.
+            max_time=slice_seconds if remaining > concurrency else max(30.0, slice_seconds / 4),
+        )
+        if len(seen) == before:
+            # A whole slice matched nothing -- an empty queue at this hour, or
+            # the competition closed. Stop rather than spin.
+            log.warning("No games matched in a full slice; stopping at %d of %d.",
+                        len(seen), target)
+            break
+        log.info("Played %d of %d.", len(seen), target)
+    return len(seen)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -82,13 +138,22 @@ def main(argv: list[str] | None = None) -> int:
         "concurrency": args.concurrency,
         "poll_interval": args.poll_interval,
     }
-    if args.max_games is not None:
-        run_kwargs["max_games"] = args.max_games
     if args.max_time is not None:
         run_kwargs["max_time"] = args.max_time
 
     try:
-        client.run(play, **run_kwargs)
+        if args.max_games is not None:
+            played = play_exactly(
+                client,
+                play,
+                families=args.families,
+                target=args.max_games,
+                concurrency=args.concurrency,
+                poll_interval=args.poll_interval,
+            )
+            log.info("Played %d games (asked for %d).", played, args.max_games)
+        else:
+            client.run(play, **run_kwargs)
     except KeyboardInterrupt:
         log.info("Interrupted -- leaving the queue.")
     except CompetitionNotOpenError as error:

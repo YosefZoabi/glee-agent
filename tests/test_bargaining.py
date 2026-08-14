@@ -3,7 +3,9 @@ import pytest
 from glee_agent.params import BARGAINING as P
 from glee_agent.strategies.bargaining import (
     _final_round_is_ours,
+    endgame_hold_value,
     endgame_sweep,
+    hold_out_value,
     opponent_is_sweeping,
     play,
     proposer_share,
@@ -44,9 +46,21 @@ class TestOffers:
         assert as_bob["bob_gain"] > as_bob["alice_gain"]
 
     def test_demand_falls_as_the_horizon_closes(self):
+        # Rounds 1 and 5 of an 8-round game are both ours to propose, so the
+        # last word is theirs in both -- comparing rounds of opposite parity
+        # would compare two different games, one where we own the endgame seat
+        # and one where we do not.
         early = play(bargaining_game(round_=1, max_rounds=8))["alice_gain"]
-        late = play(bargaining_game(round_=6, max_rounds=8))["alice_gain"]
+        late = play(bargaining_game(round_=5, max_rounds=8))["alice_gain"]
         assert late < early
+
+    def test_demand_rises_toward_the_final_ask_when_the_last_word_is_ours(self):
+        # Proposing at round 6 of 8 puts the last proposal at round 8 with us,
+        # where the responder chooses between our number and $0. Conceding into
+        # that is giving away the one seat they cannot take from us.
+        early = play(bargaining_game(round_=2, max_rounds=8))["alice_gain"]
+        late = play(bargaining_game(round_=6, max_rounds=8))["alice_gain"]
+        assert late > early
 
     def test_final_offer_still_leaves_the_opponent_a_reason_to_sign(self):
         action = play(bargaining_game(round_=6, max_rounds=6, money=1000))
@@ -84,10 +98,21 @@ class TestDecisions:
         # Rejecting here pays $0, which is the bottom of the percentile scale.
         assert play(self._offer(1, 999, round_=6, max_rounds=6))["decision"] == "accept"
 
-    def test_softens_but_does_not_capitulate_near_the_end(self):
+    def test_holds_the_endgame_seat_rather_than_softening_into_it(self):
+        # This used to assert the opposite, and the opposite was a bug. Answering
+        # an offer at all means they proposed this round, so the next round is
+        # ours -- and at round 5 of 6 the next round is the last one, where the
+        # responder picks between our number and $0. Softening one round short of
+        # the seat hands back the whole point of holding it. 12% now against
+        # 97% x 0.9 = 87% one round later is not a close call.
         near_end = self._offer(120, 880, round_=5, max_rounds=6)
-        assert play(near_end)["decision"] == "accept"
+        assert play(near_end)["decision"] == "reject"
         assert play(self._offer(120, 880, round_=1, max_rounds=6))["decision"] == "reject"
+
+    def test_still_capitulates_on_the_final_round_itself(self):
+        # The softening this replaces is not gone, just moved to where it is
+        # true: on the last round rejecting really does pay $0.
+        assert play(self._offer(120, 880, round_=6, max_rounds=6))["decision"] == "accept"
 
     def test_reads_our_own_gain_when_playing_as_bob(self):
         game = self._offer(950, 50, round_=1, max_rounds=8, slot="player_2")
@@ -134,11 +159,12 @@ class TestImpatienceClosesEarly:
         assert play(game)["decision"] == "accept"
 
     def test_a_patient_player_can_still_hold_out_for_more(self):
-        # Same offer, same pot: only the cost of waiting differs. 30% sits
-        # between the two stonewall bars (19.5% at delta 0.9, 42.4% at 0.995) --
-        # 427,179 now clears both, since a bleeding player signs almost anything.
-        patient = play(self._live_offer(300_000, delta=0.995))["decision"]
-        impatient = play(self._live_offer(300_000, delta=0.9))["decision"]
+        # Same offer, same pot: only the cost of waiting differs. The separating
+        # number moved from 300,000 to 500,000 because the last proposal of this
+        # 12-round game is ours, and waiting eleven rounds for it is worth
+        # 97% x 0.9**11 = 30% to the impatient player and 92% to the patient one.
+        patient = play(self._live_offer(500_000, delta=0.995))["decision"]
+        impatient = play(self._live_offer(500_000, delta=0.9))["decision"]
         assert (patient, impatient) == ("reject", "accept")
 
     def test_a_lowball_is_still_a_lowball_when_impatient(self):
@@ -149,7 +175,10 @@ class TestImpatienceClosesEarly:
         thresholds = []
         for delta in (0.99, 0.95, 0.9, 0.8):
             lowest_accepted = None
-            for gain in range(500_000, 100_000, -10_000):
+            # Scans from the whole pot down: at delta 0.99 the bar is now 87%,
+            # since eleven rounds of waiting for our own final proposal costs
+            # almost nothing. Starting at 500,000 found no accept at all.
+            for gain in range(1_000_000, 100_000, -10_000):
                 if play(self._live_offer(gain, delta=delta))["decision"] == "accept":
                     lowest_accepted = gain
                 else:
@@ -483,3 +512,210 @@ class TestStonewallThreshold:
         )
         game["game_state"]["proposer"] = "player_1"
         assert play(game)["decision"] == "reject"
+
+
+class TestTheEndgameSeat:
+    """Regression: chunk 7. We signed 38% while owning the final proposal.
+
+    73bcc09c is the clearest case -- our delta 0.95, theirs 1.0, twelve rounds,
+    they opened, so round 12 was ours. We took 38% in round 1. Riding to our own
+    last proposal and asking `final_round_demand` there is worth
+    0.97 * 0.95**11 = 55% in round-1 money, and it is a guarantee rather than a
+    forecast: they cannot take that seat from us, and the responder facing the
+    last offer is choosing between it and $0.
+
+    The record backs the price. Across every bargaining game we have played, the
+    last proposal was ours in 68 of them: 68 agreements, 0 no-deals, and all 12
+    that ran to the final round were signed at 97%.
+
+    `endgame_sweep` already did this at delta 1.0. This is the same claim priced
+    for a player who pays for the wait.
+    """
+
+    def _offer(self, my_share, *, delta, round_, max_rounds, pot=1_000_000, ci=False):
+        # They proposed this round, so the next one is ours: with an even
+        # `max_rounds` and an odd `round_`, the last proposal is ours.
+        return bargaining_game(
+            action_type="decision", slot="player_2", money=pot, round_=round_,
+            max_rounds=max_rounds, delta_2=delta, delta_1=0.9,
+            complete_information=ci,
+            last_offer={"player_1_gain": pot * (1 - my_share),
+                        "player_2_gain": pot * my_share,
+                        "proposer": "player_1", "round": round_},
+        )
+
+    def test_refuses_the_offer_that_cost_us_the_chunk(self):
+        assert play(self._offer(0.38, delta=0.95, round_=1, max_rounds=12))["decision"] == "reject"
+
+    def test_the_seat_is_worth_more_the_closer_it_gets(self):
+        bars = []
+        for round_ in (1, 5, 9, 11):
+            lowest = None
+            for share in [s / 100 for s in range(99, 0, -1)]:
+                if play(self._offer(share, delta=0.9, round_=round_, max_rounds=12))["decision"] == "accept":
+                    lowest = share
+            bars.append(lowest)
+        assert bars == sorted(bars), bars
+
+    def test_an_impatient_player_does_not_wait_for_it(self):
+        # 0.97 * 0.8**11 is 8% of the pot: the wait costs more than the seat is
+        # worth, so the evidence bar stays in charge and 30% is still signable.
+        assert play(self._offer(0.30, delta=0.8, round_=1, max_rounds=12))["decision"] == "accept"
+
+    def test_does_not_fire_when_the_last_word_is_theirs(self):
+        # Same everything, one round later, which flips the parity.
+        held = play(self._offer(0.38, delta=0.95, round_=2, max_rounds=12))
+        assert held["decision"] == "accept"
+
+    def test_does_not_fire_without_a_known_horizon(self):
+        # No horizon, no final round to hold, so there is no seat to price.
+        assert endgame_hold_value(
+            self._offer(0.38, delta=1.0, round_=1, max_rounds=None)["game_state"], "player_2"
+        ) == 0.0
+
+    def test_the_bar_collapse_no_longer_hands_the_seat_back(self):
+        # Answering an offer with two rounds left means they proposed at
+        # `max_rounds - 1`, so the last round is always ours. Collapsing to
+        # `endgame_floor` there was giving away the seat one round before
+        # sitting in it.
+        game = self._offer(0.10, delta=0.95, round_=11, max_rounds=12)
+        assert play(game)["decision"] == "reject"
+
+
+class TestTheNewFloorsNeverConcedeMore:
+    """The whole change is only safe if it cannot make us sign for less.
+
+    Every new claim enters through a `max` against the bar that was already
+    there, so this is a property, not a coincidence -- and it is worth pinning,
+    because the value of the previous tuning is entirely in deals we do sign.
+    """
+
+    @pytest.mark.parametrize("delta_me", [0.8, 0.9, 0.95, 1.0])
+    @pytest.mark.parametrize("delta_them", [0.8, 0.9, 0.95, 1.0])
+    @pytest.mark.parametrize("max_rounds", [None, 6, 12])
+    @pytest.mark.parametrize("ci", [True, False])
+    def test_the_bar_never_falls_below_the_evidence_bar(self, delta_me, delta_them, max_rounds, ci):
+        for round_ in range(1, (max_rounds or 12) + 1):
+            state = bargaining_game(
+                action_type="decision", slot="player_2", money=1000, round_=round_,
+                max_rounds=max_rounds, delta_1=delta_them, delta_2=delta_me,
+                complete_information=ci,
+            )["game_state"]
+            combined = max(stonewall_threshold(state, "player_2"),
+                           hold_out_value(state, "player_2") * P.accept_slack)
+            assert combined >= stonewall_threshold(state, "player_2") - 1e-12
+
+    def test_a_guessed_opponent_delta_never_raises_the_bar(self):
+        # Under incomplete information `_deltas` fills theirs in with ours. That
+        # guess is fine for shaping an offer and far too thin to bet a raised
+        # accept bar on, so the equilibrium claim is only made when their delta
+        # is actually on the table.
+        def bar(ci):
+            state = bargaining_game(
+                action_type="decision", slot="player_2", money=1000, round_=1,
+                max_rounds=None, delta_1=0.8, delta_2=0.95, complete_information=ci,
+            )["game_state"]
+            return hold_out_value(state, "player_2")
+
+        assert bar(ci=False) == 0.0
+        assert bar(ci=True) > 0.0
+
+
+class TestTheDeadlineBeatsTheClosedForm:
+    """Regression: 7159f219 and 9bb27d9e, chunk 8. We took 2% of the pot.
+
+    Our delta 1.0, twelve rounds, and the last proposal THEIRS. The
+    infinite-horizon share says a player who pays nothing for delay can hold out
+    for everything, so the equilibrium bar sat at 73% -- while the actual
+    continuation, with them holding the seat, was 22% at round 2 and 5% by round
+    10. We turned down 72% of the pot at round 10 and then took the 2% they
+    offered at round 12, where refusing pays $0.
+
+    A deadline is precisely what makes "delay is free" false, so past one the
+    finite recursion is not a stylised alternative to the closed form.
+    """
+
+    def _offer(self, my_share, *, round_, max_rounds=12, pot=10_000, d_me=1.0, d_them=0.95):
+        # We are player_1 proposing on odd rounds, so an even `max_rounds` puts
+        # the last proposal with them.
+        return bargaining_game(
+            action_type="decision", slot="player_1", money=pot, round_=round_,
+            max_rounds=max_rounds, delta_1=d_me, delta_2=d_them,
+            complete_information=True,
+            last_offer={"player_1_gain": pot * my_share,
+                        "player_2_gain": pot * (1 - my_share),
+                        "proposer": "player_2", "round": round_},
+        )
+
+    def test_signs_the_offer_it_used_to_grind_past(self):
+        assert play(self._offer(0.498, round_=2))["decision"] == "accept"
+
+    def test_signs_the_72_percent_it_turned_down_at_round_ten(self):
+        assert play(self._offer(0.72, round_=10))["decision"] == "accept"
+
+    def test_the_bar_falls_as_their_seat_gets_closer(self):
+        bars = []
+        for round_ in (2, 6, 10):
+            lowest = None
+            for share in [s / 100 for s in range(99, 0, -1)]:
+                if play(self._offer(share, round_=round_))["decision"] == "accept":
+                    lowest = share
+            bars.append(lowest)
+        assert bars == sorted(bars, reverse=True), bars
+
+    def test_an_open_ended_game_still_uses_the_closed_form(self):
+        # No deadline, so nothing makes "delay is free" false: a910fa01 was
+        # exactly this shape and holding out was right there.
+        game = bargaining_game(
+            action_type="decision", slot="player_1", money=1_000_000, round_=1,
+            max_rounds=None, delta_1=1.0, delta_2=0.8, complete_information=True,
+            last_offer={"player_1_gain": 447_000, "player_2_gain": 553_000,
+                        "proposer": "player_2", "round": 1},
+        )
+        assert play(game)["decision"] == "reject"
+
+    def test_the_endgame_seat_is_untouched_when_it_is_ours(self):
+        # fb5dcaac: refused 38% at round 1 and took 97% at round 12. The seat is
+        # a separate claim and must survive this cap.
+        game = bargaining_game(
+            action_type="decision", slot="player_2", money=1_000_000, round_=1,
+            max_rounds=12, delta_1=1.0, delta_2=0.95, complete_information=True,
+            last_offer={"player_1_gain": 620_000, "player_2_gain": 380_000,
+                        "proposer": "player_1", "round": 1},
+        )
+        assert play(game)["decision"] == "reject"
+
+
+class TestTheOpenEndedWalkOnlyEverGoesDown:
+    """Regression: 92727cf1. Sixty-nine rounds to bank 274 of a 353,652 split.
+
+    The open-ended rule interpolates the bar toward `min_accept_share` as the
+    soft horizon passes, which walks it DOWN from a high bar and UP from a low
+    one -- and a low bar is what every impatient player has. At delta 0.9 ours
+    climbed 19.5% -> 35% while each round burned 10% of the prize, so the rule
+    meant to stop us grinding was the thing doing the grinding.
+    """
+
+    def _standing(self, share, round_, delta=0.9, pot=1_000_000):
+        return bargaining_game(
+            action_type="decision", slot="player_2", money=pot, round_=round_,
+            max_rounds=None, delta_2=delta, complete_information=False,
+            last_offer={"player_1_gain": pot * (1 - share), "player_2_gain": pot * share,
+                        "proposer": "player_1", "round": round_},
+        )
+
+    def test_a_standing_offer_does_not_get_harder_to_accept_over_time(self):
+        # 25% is above the delta-0.9 bar of 19.5% and below `min_accept_share`,
+        # so this is exactly the band the old interpolation walked away from.
+        for round_ in (1, 5, 15, 40, 69):
+            assert play(self._standing(0.25, round_))["decision"] == "accept", round_
+
+    def test_a_patient_player_still_walks_its_high_bar_down(self):
+        # The walk-down itself is not gone: at delta 1.0 the bar starts above
+        # `min_accept_share`, and holding it forever is what pays $0.
+        early = play(self._standing(0.36, 1, delta=1.0))["decision"]
+        late = play(self._standing(0.36, 40, delta=1.0))["decision"]
+        assert (early, late) == ("reject", "accept")
+
+    def test_a_real_lowball_is_still_refused_however_long_it_stands(self):
+        assert play(self._standing(0.05, 60))["decision"] == "reject"

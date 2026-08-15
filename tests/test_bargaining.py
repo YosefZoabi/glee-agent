@@ -719,3 +719,57 @@ class TestTheOpenEndedWalkOnlyEverGoesDown:
 
     def test_a_real_lowball_is_still_refused_however_long_it_stands(self):
         assert play(self._standing(0.05, 60))["decision"] == "reject"
+
+
+class TestWaitingIsFreeSoWaitLonger:
+    """Regression: a 10,000 pot, 0% inflation, no round limit. We took 48%.
+
+    Both hold-out claims were unavailable -- no horizon means no final proposal
+    to sit on, and incomplete information means no equilibrium to compute -- so
+    a player who paid nothing at all to wait defended the flat evidence bar of
+    45%, walked down to 44%, and signed.
+
+    What the record says about that, over 56 post-fix games of exactly this
+    shape: rejecting an offer of 40-45% ended at a median 47.2% (+5.2),
+    rejecting 45-50% ended at 49.0% (+1.7), rejecting 50-55% gained nothing,
+    and NO band produced a single no-deal. Break-even is 50%.
+    """
+
+    def _offer(self, share, *, delta=1.0, round_=2, max_rounds=None, ci=False, pot=10_000):
+        return bargaining_game(
+            action_type="decision", slot="player_1", money=pot, round_=round_,
+            max_rounds=max_rounds, delta_1=delta, complete_information=ci,
+            last_offer={"player_1_gain": pot * share, "player_2_gain": pot * (1 - share),
+                        "proposer": "player_2", "round": round_},
+        )
+
+    def test_refuses_the_offer_it_used_to_sign(self):
+        assert play(self._offer(0.48))["decision"] == "reject"
+
+    def test_signs_once_the_offer_clears_the_break_even(self):
+        assert play(self._offer(0.52))["decision"] == "accept"
+
+    def test_an_inflating_player_is_untouched(self):
+        # The floor is priced on delay being free. At 10% a round it is not, and
+        # holding out for two more points is how you lose forty.
+        for delta in (0.8, 0.9, 0.95):
+            assert play(self._offer(0.48, delta=delta))["decision"] == "accept", delta
+
+    def test_a_known_horizon_is_untouched(self):
+        # Bounded games already have the endgame seat and the deadline cap; this
+        # floor is only for the case where neither exists.
+        assert play(self._offer(0.48, max_rounds=12))["decision"] == "accept"
+
+    def test_the_walk_down_still_breaks_a_deadlock(self):
+        # The floor must not become the round-99 stalemate it replaced.
+        assert play(self._offer(0.48, round_=20))["decision"] == "accept"
+
+    def test_it_is_a_floor_and_never_a_ceiling(self):
+        from glee_agent.strategies.bargaining import costless_hold_value
+        for delta in (0.8, 0.9, 0.95, 1.0):
+            for max_rounds in (None, 12):
+                state = self._offer(0.5, delta=delta, max_rounds=max_rounds)["game_state"]
+                assert costless_hold_value(state, "player_1") >= 0.0
+                combined = max(stonewall_threshold(state, "player_1"),
+                               costless_hold_value(state, "player_1"))
+                assert combined >= stonewall_threshold(state, "player_1") - 1e-12

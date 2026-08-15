@@ -77,6 +77,16 @@ class BargainingParams:
     # take `final_round_demand`, because rejecting it pays the responder $0.
     # Below it, stalling burns real money and the normal schedule applies.
     costless_delay_delta: float = 0.999
+    # ...and with no horizon at all there is no last proposal to hold, so the
+    # sweep cannot fire and neither can the equilibrium bar, which needs the
+    # opponent's delta. That left a costless-delay player defending the flat
+    # `realistic_counter_share`, and 45% is measurably too low there. Across 56
+    # post-fix games of exactly this shape, rejecting an offer of 40-45% ended
+    # at a median 47.2% (+5.2), rejecting 45-50% ended at 49.0% (+1.7), and
+    # rejecting 50-55% gained nothing -- with zero no-deals in any band. The
+    # break-even sits at 50%, so that is where a player who pays nothing to wait
+    # should stand. Only ever a floor: `max` against the evidence bar.
+    costless_hold_share: float = 0.50
 
     # --- Facing a sweeper -------------------------------------------------
     # The mirror image: THEY hold the last proposal and are stalling to it. Our
@@ -163,6 +173,16 @@ class PersuasionParams:
     # Strength of the prior on seller honesty, in pseudo-observations. Low =
     # adapt fast to a liar, high = forgive noise.
     belief_prior_weight: float = 4.0
+    # How many rounds of watching before the seller's rationing rate is taken at
+    # face value, in the same pseudo-observation units. Separate from the weight
+    # above because it governs a different thing: that one is how fast a proven
+    # liar loses credit, this one is how fast an unproven rationer earns it.
+    # Accuracy is flat between 0 and 10 (9.1%-10.0% median error), so the choice
+    # is purely how long we sit out while deciding -- and sitting out is not free
+    # here, it is the entire failure being fixed. At 2 the estimate is still
+    # conservative (measured bias -1.7%) and crosses a typical bar around round
+    # 6 rather than round 12.
+    rate_prior_weight: float = 2.0
     # Buy on a marginal expected value during the first rounds: a purchase is
     # the only way to observe quality, and that information prices every later
     # round.

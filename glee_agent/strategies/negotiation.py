@@ -89,14 +89,21 @@ def opponent_has_stopped_moving(state: dict, slot: str) -> bool:
     return len(set(prices[-P.stonewall_offers:])) == 1
 
 
-def _target_price(state: dict, slot: str, role: str) -> float:
-    """The price we are holding out for this round."""
+def _target_price(state: dict, slot: str, role: str, last_word: bool = False) -> float:
+    """The price we are holding out for this round.
+
+    `last_word` marks the case where the number we are about to put down is the
+    final offer of the game -- either because this is the last round, or because
+    we are answering an offer with two rounds left, so our counter lands on the
+    last round and they choose between it and nothing. Both are the end of the
+    schedule, so both run it to completion.
+    """
     my_value = number(state, f"{slot}_value", 0.0) or 0.0
     opponent_value = number(state, f"{OPPOSITE[slot]}_value", None)
     # On the final round there is no schedule left to run: this price is the
     # last word, and rejecting it pays $0. A one-round game is final on round 1,
     # where `progress` is still 0 -- so ask the horizon, not the clock.
-    t = 1.0 if is_final_round(state) else progress(state, P.unbounded_soft_horizon)
+    t = 1.0 if (last_word or is_final_round(state)) else progress(state, P.unbounded_soft_horizon)
 
     if opponent_value is not None:
         # Known zone of agreement: open just inside their limit, concede to the
@@ -184,8 +191,15 @@ def _make_decision(game: dict) -> dict:
     left = rounds_left(state, P.unbounded_soft_horizon)
     final = is_final_round(state)
 
-    # Out of road: any positive profit beats the $0 a no-deal pays.
-    if final or (left is not None and left <= P.endgame_rounds):
+    # Out of road: any positive profit beats the $0 a no-deal pays. But only
+    # when the road has really run out. Answering an offer means they proposed
+    # this round, so the next one is ours -- and with an even number of rounds
+    # left, the LAST proposal of the game is ours, where they choose between our
+    # price and nothing. Taking any scrap there is selling the one seat they
+    # cannot take from us. Measured over chunk 9: accepting at two rounds left
+    # captured a median 27.9% of the surplus against 50.0% everywhere else.
+    last_proposal_ours = left is not None and left % 2 == 0
+    if final or (left is not None and left <= P.endgame_rounds and not last_proposal_ours):
         if gain > 0:
             return {"decision": "AcceptOffer"}
         if final:
@@ -200,7 +214,11 @@ def _make_decision(game: dict) -> dict:
     if gain > 0 and opponent_has_stopped_moving(state, slot):
         return {"decision": "AcceptOffer"}
 
-    target = _target_price(state, slot, role)
+    # If our counter lands on the last round, what it fetches there IS our
+    # continuation value, so it prices the accept bar too -- comparing against a
+    # mid-schedule number we will never actually offer would overstate what
+    # holding out is worth.
+    target = _target_price(state, slot, role, last_word=last_proposal_ours and left == 2)
     if gain >= _profit(role, target, my_value) * P.accept_slack:
         return {"decision": "AcceptOffer"}
 

@@ -29,10 +29,23 @@ from ..params import PERSUASION as P
 
 # Phrases a seller only writes when steering us away from a sale.
 _NEGATIVE_HINTS = (
+    # Explicit refusals.
     "not worth", "not recommend", "do not recommend", "don't recommend",
     "wouldn't recommend", "would not recommend", "not a good", "not great",
     "skip this", "sit this", "pass on this", "avoid", "poor quality",
     "low quality", "not buy", "don't buy", "do not buy",
+    # Hedged refusals. Sellers rarely say "do not buy" -- they say the unit is
+    # ordinary and leave the buyer to draw the conclusion. Reading only the
+    # explicit form meant we bought products the seller had just warned us
+    # about: measured across every round where quality was later revealed,
+    # these phrasings delivered high quality 0-12% of the time, against 79-97%
+    # for genuine recommendations. 165+ purchases of known-bad stock.
+    "below our usual", "below my usual", "below usual", "not up to my usual",
+    "not up to our usual", "isn't my best", "is not my best", "not my best",
+    "ordinary unit", "nothing special", "unremarkable",
+    "want to pass", "understand a pass", "understand if you",
+    "not this round", "better to wait", "wait for a better",
+    "want to skip", "hold off", "not the one",
 )
 
 
@@ -341,14 +354,80 @@ def _seller_message(game: dict) -> dict:
     return {"message": " ".join(parts)}
 
 
+def recommendation_rate(game: dict) -> float | None:
+    """Fraction of rounds so far that the seller has recommended.
+
+    Visible without buying anything, which is the entire point of it.
+    """
+    rounds = history(game)
+    if not rounds:
+        return None
+    return sum(1 for entry in rounds if _is_positive(entry.get("seller_message"))) / len(rounds)
+
+
+def signal_posterior(game: dict, p: float) -> float:
+    """P(high | recommended), inferred from how hard the seller is rationing.
+
+    A seller never talks down a high-quality product -- it costs them the sale
+    and buys nothing -- so every high round sits among the recommended ones:
+
+        P(high | recommended) = P(high) / P(recommended) = p / rate
+
+    which needs no purchases at all. That matters because quality is revealed
+    only on rounds we buy (0 of 2,606 unbought rounds ever showed it), so a
+    belief that updates only on purchases has an absorbing state: in a hard
+    market the prior starts below the buyer's bar by definition, we decline, the
+    belief never moves, and we decline for the rest of the game. Measured over
+    chunk 9: 79 games sat out end to end for a payoff of exactly zero, with the
+    seller rationing honestly in most of them.
+
+    It degrades in the right direction, too. A seller who recommends everything
+    has rate = 1, the estimate collapses back to `p`, and we behave exactly as
+    before -- correctly, because they told us nothing. Checked against the only
+    ground truth available (quality on rounds we did buy): this predicts
+    P(high | recommended) to a median 9.1% error against 13.7% for the bare
+    prior, and in the rationing bucket the prior is off by fifty points.
+
+    NOT CURRENTLY USED, and the reason is worth keeping. Wired into the buyer's
+    prior for chunk 10 it did exactly what it was designed to do -- games where
+    we never bought a single round fell from 34% to 17%, and hard-market buying
+    rose from 16.6% of rounds to 30.8%. It also lost money. Those purchases came
+    in at 71.2% high quality against a bar of 80.0%, 3.5 sigma below, where the
+    old policy had sat at 79.4% and roughly broken even.
+
+    Two errors produced that. First, `p / rate` is a CEILING on the posterior,
+    not a point estimate: it is exact only if the seller recommends every single
+    high-quality unit, and every deviation makes it optimistic. Second, and
+    worse, it was validated against rounds we had CHOSEN to buy -- rounds where
+    the belief already cleared the bar -- which says nothing about the marginal
+    rounds it newly licenses. Shipping it beside the classifier fix compounded
+    both: better negative detection lowers `rate`, which raises `p / rate`, so
+    the estimator went live materially more aggressive than the version measured.
+
+    The idea may still be sound. It needs validating under the current
+    classifier, on rounds we did not already want to buy, before it goes back in.
+    """
+    rate = recommendation_rate(game)
+    if rate is None or rate <= 0.0:
+        return p
+    raw = clamp(p / rate, 0.0, 1.0)
+    seen = len(history(game))
+    return clamp(p + (raw - p) * (seen / (seen + P.rate_prior_weight)), 0.0, 1.0)
+
+
 def _buyer_credibility(game: dict, p: float) -> float:
     """Posterior probability that a recommended product is high quality.
 
     Counts only rounds we actually bought after a positive signal -- quality is
-    hidden on rounds we passed, so those carry no evidence either way.
+    hidden on rounds we passed, so those carry no evidence either way. What the
+    passes DO carry is the seller's rationing, which `signal_posterior` reads,
+    and which seeds the prior here instead of the bare `p`.
     """
+    # `signal_posterior` was wired in here and is deliberately NOT any more --
+    # see its docstring for what the live data did to it.
+    base = p
     weight = P.belief_prior_weight
-    high, low = p * weight, (1.0 - p) * weight
+    high, low = base * weight, (1.0 - base) * weight
     for entry in history(game):
         if not entry.get("bought"):
             continue
@@ -360,7 +439,7 @@ def _buyer_credibility(game: dict, p: float) -> float:
         elif quality == "low":
             low += 1.0
     total = high + low
-    return clamp(high / total, 0.0, 1.0) if total > 0 else p
+    return clamp(high / total, 0.0, 1.0) if total > 0 else base
 
 
 def _buyer_decision(game: dict) -> dict:

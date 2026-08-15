@@ -2,6 +2,7 @@ import pytest
 
 from glee_agent.params import PERSUASION as P
 from glee_agent.strategies.persuasion import (
+    signal_posterior,
     _seller_recommends,
     buyer_ignores_us,
     buyer_threshold,
@@ -464,3 +465,67 @@ class TestUnknownBuyerValue:
         )
         assert regime(0.9, 60, 100, 0.0) == "easy"
         assert _seller_recommends(game) is True
+
+
+class TestSellerRationingIsMeasuredButNotActedOn:
+    """Chunk 10: the rationing estimator went live, worked, and lost money.
+
+    It did what it was built for -- games where we never bought a single round
+    fell 34% -> 17%, hard-market buying rose 16.6% -> 30.8% of rounds. But those
+    purchases came in at 71.2% high quality against a bar of 80.0% (n=333, 3.5
+    sigma below), where the old policy sat at 79.4% and broke even. Persuasion
+    lost 24 rating points over 152 games.
+
+    `p / rate` is a CEILING, exact only if every high-quality unit is
+    recommended, and it was validated on rounds we had already chosen to buy --
+    which says nothing about the marginal rounds it newly licenses. It is kept,
+    documented and tested as a measurement; it is not wired into the decision.
+    """
+
+    def _game(self, *, p, price, v, rounds, rec_every_n=1, total=20):
+        history = [
+            {"round": r, "seller_message": ("Worth it at this price." if r % rec_every_n == 0
+                                            else "Nothing special. I'd understand a pass."),
+             "buyer_decision": "no", "bought": False}
+            for r in range(1, rounds + 1)
+        ]
+        return persuasion_game(
+            action_type="buyer_decision", slot="player_2", p=p, v=v, u=0.0,
+            price=price, round_=rounds + 1, total_rounds=total,
+            seller_message="Worth it at this price.", history=history,
+        )
+
+    def test_the_estimator_still_reads_rationing_correctly(self):
+        game = self._game(p=1 / 3, price=1_000_000, v=1_250_000, rounds=9, rec_every_n=3)
+        assert signal_posterior(game, 1 / 3) > 1 / 3
+
+    def test_but_the_buyer_does_not_act_on_it(self):
+        # The regression this guards: wiring it back in without first validating
+        # it on rounds we did not already want to buy.
+        game = self._game(p=1 / 3, price=1_000_000, v=1_250_000, rounds=9, rec_every_n=3)
+        assert play(game)["decision"] == "no"
+
+    def test_a_seller_who_recommends_everything_reads_as_the_prior(self):
+        game = self._game(p=1 / 3, price=1_000_000, v=1_250_000, rounds=9, rec_every_n=1)
+        assert signal_posterior(game, 1 / 3) == pytest.approx(1 / 3)
+
+    def test_the_estimate_stays_within_bounds(self):
+        for rate_n in (1, 2, 3, 8):
+            for p in (0.05, 1 / 3, 0.5, 0.95):
+                game = self._game(p=p, price=100, v=125, rounds=8, rec_every_n=rate_n)
+                assert 0.0 <= signal_posterior(game, p) <= 1.0
+
+    def test_a_proven_liar_still_overrides_the_rationing(self):
+        # Rationing is only a prior; rounds we bought are hard evidence and must
+        # win. A seller who rations AND delivers junk gets no credit for it.
+        history = [
+            {"round": r, "seller_message": "Worth it at this price.",
+             "buyer_decision": "yes", "bought": True, "quality": "low"}
+            for r in range(1, 9)
+        ]
+        game = persuasion_game(
+            action_type="buyer_decision", slot="player_2", p=1 / 3, v=1_250_000, u=0.0,
+            price=1_000_000, round_=9, total_rounds=20,
+            seller_message="Worth it at this price.", history=history,
+        )
+        assert play(game)["decision"] == "no"

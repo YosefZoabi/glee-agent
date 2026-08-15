@@ -773,3 +773,59 @@ class TestWaitingIsFreeSoWaitLonger:
                 combined = max(stonewall_threshold(state, "player_1"),
                                costless_hold_value(state, "player_1"))
                 assert combined >= stonewall_threshold(state, "player_1") - 1e-12
+
+
+class TestSeeingTheirClockMustNotMakeUsWorse:
+    """Chunks 9 and 12: complete information COST us 5-6% at delta 0.8.
+
+    0.8 is the bottom of the observed delta grid, so a visible opponent is
+    almost always the more patient one. The equilibrium share collapses --
+    proposer_share(0.8, 0.95) is 0.208 -- lands on the `never_concede_below`
+    clamp, and we open lower than the incomplete-information path, which assumes
+    symmetry and floors at 0.556.
+
+    Measured on identical delta and horizon, visible against hidden: -5.7% and
+    -5.0% (chunk 9), -6.4% (chunk 12). Every delta at 0.9 and above GAINED from
+    the extra information, so the fix is not to ignore it -- it is to stop it
+    lowering the floor. Bargaining took zero no-deals across 521 games, so
+    asking for more is close to free here.
+    """
+
+    def _open(self, d_me, d_them, ci=True, pot=1_000_000, max_rounds=12):
+        return play(bargaining_game(slot="player_1", money=pot, round_=1, max_rounds=max_rounds,
+                                    delta_1=d_me, delta_2=d_them,
+                                    complete_information=ci))["alice_gain"] / pot
+
+    def test_it_does_not_apply_without_a_horizon_to_enforce_it(self):
+        """Chunk 13: this helped bounded games and hurt open-ended ones.
+
+        delta 0.8 with their clock visible went 38.0% -> 41.4% bounded, but
+        44.4% -> 37.5% open, and the median settle round moved 1 -> 2. The
+        accept bar at delta 0.8 is 11.8%, so opening higher pushed them past
+        round one and we then signed their counter. A known horizon forces a
+        resolution before that cycle can run; an open one does not.
+        """
+        assert self._open(0.8, 0.95, max_rounds=None) < self._open(0.8, 0.95, max_rounds=12)
+
+    def test_a_patient_opponent_no_longer_lowers_our_opening(self):
+        # The regression: these three differed, and the gap was the whole defect.
+        assert self._open(0.8, 0.8) == pytest.approx(self._open(0.8, 0.95))
+        assert self._open(0.8, 0.8) == pytest.approx(self._open(0.8, 1.0))
+
+    def test_seeing_their_clock_matches_not_seeing_it_at_worst(self):
+        for d_me in (0.8, 0.9, 0.95, 1.0):
+            for d_them in (0.8, 0.9, 0.95, 1.0):
+                seen = self._open(d_me, d_them, ci=True)
+                hidden = self._open(d_me, d_me, ci=False)
+                assert seen >= hidden - 1e-9, (d_me, d_them, seen, hidden)
+
+    def test_an_impatient_opponent_is_still_exploited(self):
+        # The information is still worth having when it favours us -- this must
+        # not flatten into "always assume a twin".
+        assert self._open(0.9, 0.8) > self._open(0.9, 0.95)
+        assert self._open(0.95, 0.8) > self._open(0.95, 1.0)
+
+    def test_the_ceiling_still_holds(self):
+        for d_me in (0.8, 0.9, 0.95, 1.0):
+            for d_them in (0.8, 0.9, 0.95, 1.0):
+                assert self._open(d_me, d_them) <= P.final_round_demand + 1e-9

@@ -336,6 +336,29 @@ def _make_offer(game: dict) -> dict:
     # The equilibrium share is a floor to protect, not an opening bid to
     # announce -- and never a reason to concede past what the field will sign.
     floor = clamp(proposer_share(delta_me, delta_opp, None), P.never_concede_below, P.never_demand_above)
+    # Seeing that they are the patient one is not a reason to hand them the pot.
+    # 0.8 is the bottom of the delta grid, so a visible opponent is almost always
+    # more patient than us there, the equilibrium share collapses to the clamp,
+    # and we open lower than we would have if we could not see it at all.
+    # Measured on the same delta and horizon, complete information against
+    # hidden: -5.7% and -5.0% in chunk 9, -6.4% in chunk 12, while every delta
+    # at 0.9 and above gained from the extra information. Bargaining took zero
+    # no-deals in 521 games, so the risk of asking for more is not the binding
+    # constraint -- being talked out of asking is. Never demand less than we
+    # would against an opponent assumed to be our own twin.
+    # ...but only where we can actually hold the line. With a known horizon the
+    # endgame forces a resolution and the extra demand sticks: delta 0.8 with
+    # their clock visible went 38.0% -> 41.4%. With an OPEN horizon and an
+    # impatient agent it backfired, 44.4% -> 37.5%, because the accept bar at
+    # delta 0.8 is 11.8% -- we opened high enough to push them past round one
+    # and then signed whatever they countered with, settling a round later for
+    # less. Do not demand what the accept bar will not defend.
+    if rounds_left(state, 0) is not None:
+        floor = max(
+            floor,
+            clamp(proposer_share(delta_me, delta_me, None),
+                  P.never_concede_below, P.never_demand_above),
+        )
     # Never offer to keep less than we would insist on as the responder, or we
     # spend the leverage on our own turn that we were holding out for on theirs.
     floor = max(floor, hold_out_value(state, slot))

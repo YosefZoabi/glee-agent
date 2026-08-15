@@ -229,7 +229,29 @@ def hold_out_value(state: dict, slot: str) -> float:
         state, _DELTA_KEY[OPPOSITE[slot]], None
     ) is not None:
         equilibrium = _continuation_value(state, slot)
-    return max(endgame_hold_value(state, slot), equilibrium)
+
+    return max(endgame_hold_value(state, slot), equilibrium, costless_hold_value(state, slot))
+
+
+def costless_hold_value(state: dict, slot: str) -> float:
+    """What simply waiting is worth when waiting is free and the clock is open.
+
+    Neither of the other two claims can be made in an open-ended game whose
+    opponent delta we cannot see: there is no final proposal to hold and no
+    equilibrium to compute. That left a player with no inflation at all
+    defending the flat evidence bar, which is measurably too low -- see
+    `costless_hold_share` for the numbers.
+
+    Deliberately NOT discounted by `accept_slack`. That discount prices one more
+    round of our own inflation against the chance the opponent never moves, and
+    here the first term is exactly zero -- which is the whole reason this floor
+    exists. Applying it anyway pulled the bar to 47.4% and went on signing the
+    48% offers this was written to refuse.
+    """
+    delta_me, _ = _deltas(state, slot)
+    if delta_me < P.costless_delay_delta or rounds_left(state, 0) is not None:
+        return 0.0
+    return P.costless_hold_share
 
 
 def opponent_is_sweeping(game: dict, slot: str) -> bool:
@@ -396,7 +418,9 @@ def _make_decision(game: dict) -> dict:
     # to chase a 55.2% guarantee eleven rounds away -- taking on the whole risk
     # of the wait for two tenths of a percent.
     threshold = money * max(
-        stonewall_threshold(state, slot), hold_out_value(state, slot) * P.accept_slack
+        stonewall_threshold(state, slot),
+        hold_out_value(state, slot) * P.accept_slack,
+        costless_hold_value(state, slot),
     )
 
     left = rounds_left(state, P.unbounded_soft_horizon)

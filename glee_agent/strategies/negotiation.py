@@ -111,8 +111,12 @@ def _target_price(state: dict, slot: str, role: str, last_word: bool = False) ->
         # them zero profit and no reason to sign.
         span = opponent_value - my_value
         best = opponent_value - P.zopa_shade * span
-        fair = (my_value + opponent_value) / 2.0
-        return best + (fair - best) * t
+        # Where the schedule lands. `my_value + share * span` is our share of the
+        # surplus for either role: span is positive as a seller and negative as a
+        # buyer, so a larger share always moves the price our way. At 0.5 this is
+        # the midpoint the schedule used to stop at -- see `surplus_target`.
+        target = my_value + P.surplus_target * span
+        return best + (target - best) * t
 
     scale = _scale(state, my_value)
     if role == "seller":

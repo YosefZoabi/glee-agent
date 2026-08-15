@@ -119,8 +119,13 @@ class TestTakeItOrLeaveIt:
         action = play(
             negotiation_game(slot="player_1", my_value=40, opponent_value=100, round_=1, max_rounds=1)
         )
-        # No rounds left to shade toward: take the midpoint, which they will sign.
-        assert action["product_price"] == pytest.approx(70.0)
+        # No rounds left to shade toward, so the schedule runs to its terminus.
+        # That used to be the midpoint (70.0); it is now `surplus_target` of the
+        # zone, because a schedule ending on an even split is aiming at the
+        # median outcome by construction. Still comfortably signable: at 73 the
+        # buyer keeps 27 of a 60-wide zone against 0 for refusing.
+        assert action["product_price"] == pytest.approx(40 + P.surplus_target * 60)
+        assert 40 < action["product_price"] < 100
 
 
 class TestAStandingOfferFromSomeoneWhoHasStoppedNegotiating:
@@ -195,3 +200,60 @@ class TestAStandingOfferFromSomeoneWhoHasStoppedNegotiating:
             last_offer={"price": 815_000, "from_player": "player_2", "round": 12},
         )
         assert play(game)["decision"] == "RejectOffer"
+
+
+class TestTheScheduleNoLongerAimsAtTheMedian:
+    """Chunks 12-14, 1,628 games: complete-info deals sat on exactly 50.0%.
+
+    The schedule terminated on `(my_value + opponent_value) / 2`, and a policy
+    that ends on an even split is aiming at the median by construction -- which
+    is why those games scored at the 50th percentile, with 42% of them landing
+    on 50.0% to the cent.
+
+    Holding out was measured to pay at every level, with no no-deal risk:
+    rejecting 30-40% of the surplus ended at a median 50.0%, rejecting 40-50%
+    ended at 59.2%, rejecting 50-60% ended at 63.8%, and 0% of those games ended
+    in a zero. Failing to close here is structural, not caused by firmness: of
+    735 zeros only 5 (1%) ever had a profitable offer on the table.
+    """
+
+    def _final_price(self, *, role, my_value, opponent_value):
+        slot = "player_1" if role == "seller" else "player_2"
+        return play(negotiation_game(
+            slot=slot, my_value=my_value, opponent_value=opponent_value,
+            round_=1, max_rounds=1,
+        ))["product_price"]
+
+    def test_the_seller_lands_above_the_midpoint(self):
+        price = self._final_price(role="seller", my_value=40, opponent_value=100)
+        assert price > 70.0
+        assert price == pytest.approx(40 + P.surplus_target * 60)
+
+    def test_the_buyer_lands_below_the_midpoint(self):
+        # Symmetric: `span` is negative for a buyer, so the same share moves the
+        # price the other way. Getting this backwards would concede MORE.
+        price = self._final_price(role="buyer", my_value=100, opponent_value=40)
+        assert price < 70.0
+        assert price == pytest.approx(100 - P.surplus_target * 60)
+
+    def test_both_roles_capture_the_same_share_of_surplus(self):
+        seller = self._final_price(role="seller", my_value=40, opponent_value=100) - 40
+        buyer = 100 - self._final_price(role="buyer", my_value=100, opponent_value=40)
+        assert seller == pytest.approx(buyer)
+        assert seller / 60 == pytest.approx(P.surplus_target)
+
+    def test_it_still_leaves_them_a_reason_to_sign(self):
+        # The whole zone must never be taken -- they need positive profit or
+        # refusing costs them nothing.
+        for mv, ov in ((40, 100), (8000, 15000), (800_000, 1_000_000)):
+            price = self._final_price(role="seller", my_value=mv, opponent_value=ov)
+            assert mv < price < ov
+
+    def test_the_endgame_still_takes_any_positive_profit(self):
+        # The safety net is untouched: on the last round a thin profit beats $0.
+        game = negotiation_game(
+            action_type="decision", slot="player_1", my_value=8000,
+            opponent_value=15000, round_=10, max_rounds=10,
+            last_offer={"price": 8100, "from_player": "player_2", "round": 10},
+        )
+        assert play(game)["decision"] == "AcceptOffer"

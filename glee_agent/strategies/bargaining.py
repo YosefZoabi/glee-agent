@@ -370,6 +370,30 @@ def _make_offer(game: dict) -> dict:
     weight = (1.0 - progress(state, P.unbounded_soft_horizon)) ** P.concession_exponent
     demand = floor + (opening - floor) * weight
 
+    # A haggle we cannot afford is not worth opening. See `closing_offer_delta`:
+    # the field does not move and does not price-shop, so the only thing our
+    # inflated opening buys is the round of inflation it takes them to counter.
+    # Never below what we would hold out for as the responder, which leaves the
+    # complete-information cells where we are the patient side untouched.
+    # Open horizons only. Chunk 13 measured the opposite sign in the two
+    # regimes: raising the opening took bounded delta-0.8 games 38.0% -> 41.4%
+    # and open ones 44.4% -> 37.5%. A known horizon forces a resolution and the
+    # extra demand sticks; an open one lets the haggle run, which is the cycle
+    # this closes. Do not spend a measured gain to buy an unmeasured one.
+    # ...and only where the haggle is actually worthless. A visible patience
+    # edge is a claim we can hold: seeing that they inflate faster than we do
+    # pays a median 0.63-0.75 of the pot in exactly these cells, against the
+    # 0.44 the field counters with elsewhere. Closing early there would hand
+    # back the one advantage complete information buys, so when `hold_out_value`
+    # already clears the closing share we leave the schedule alone entirely.
+    closing = (
+        delta_me <= P.closing_offer_delta
+        and rounds_left(state, 0) is None
+        and hold_out_value(state, slot) < P.closing_offer_share
+    )
+    if closing:
+        demand = min(demand, max(P.closing_offer_share, P.never_concede_below))
+
     if left is not None:
         if left <= 1:
             # We hold the last word: rejecting pays the responder $0, so this is
@@ -391,7 +415,12 @@ def _make_offer(game: dict) -> dict:
     else:
         action = {"alice_gain": theirs, "bob_gain": mine}
     if messages_allowed(game):
-        action["message"] = _offer_message(state, demand)
+        # The endgame branches above can overwrite `demand` outright, so the
+        # closing message is only honest if the closing rule is still what set
+        # the number we are actually sending.
+        action["message"] = _offer_message(
+            state, demand, closing and demand <= P.closing_offer_share + 1e-9
+        )
         if opponent_is_sweeping(game, slot):
             # We cannot actually punish them -- walking away pays us $0 too, and
             # at the end we will take their token rather than nothing. But the
@@ -478,8 +507,20 @@ def _make_decision(game: dict) -> dict:
     return {"decision": "reject"}
 
 
-def _offer_message(state: dict, demand: float) -> str:
+def _offer_message(state: dict, demand: float, closing: bool = False) -> str:
     round_number = int(number(state, "round", 1) or 1)
+    if closing:
+        # The one channel left. Our offers are accepted 4-10% of the time
+        # regardless of what we ask, so the number is not what decides this --
+        # the text is. Three things an LLM can act on: the split is even, the
+        # offer will not improve, and countering costs them. Deliberately does
+        # NOT mention our own inflation rate: an opponent told we are the
+        # impatient one has every reason to wait us out.
+        return (
+            "I am opening at my number rather than an inflated one, so this is "
+            "an even split you can sign right now. I will not beat it later -- a "
+            "counter just spends a round of value we both keep by closing today."
+        )
     if demand >= 0.7:
         return (
             "Opening where I think the value sits. Every round we spend arguing "

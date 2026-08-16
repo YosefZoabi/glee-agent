@@ -104,6 +104,38 @@ class BargainingParams:
     # patient sweeper they beat the fair split that will never be offered.
     sweep_accept_margin: float = 1.5
 
+    # --- Closing instead of haggling --------------------------------------
+    # An impatient proposer cannot afford a negotiation. Two measurements over
+    # 1,469 games say so together:
+    #
+    #   * Our openings are accepted 4-10% of the time whether we ask 0.65 or
+    #     0.85 -- the field is not price-sensitive, it is running its own
+    #     schedule, so a high opening buys nothing.
+    #   * The field concedes a median of +0.0000 per round (mean +0.0093, only
+    #     30% of steps an improvement at all), so the haggle it buys goes
+    #     nowhere.
+    #
+    # What actually happens in 473 games: we open ~0.66, they counter ~0.44, and
+    # we sign that counter one round later. At delta 0.8 the round costs 20% of
+    # the pot, so a 0.440 deal pays 0.352. We are paying a full round of interest
+    # for a bid that almost never lands. Below this delta, open at a number that
+    # can be signed on the spot instead.
+    #
+    # Only ever a `min` against the scheduled demand, floored by
+    # `hold_out_value` and `never_concede_below`, so it can lower an opening but
+    # can never offer to keep less than we would insist on as the responder --
+    # which is what protects the complete-information cells where we are the
+    # patient side and the equilibrium share is genuinely high.
+    #
+    # Restricted to OPEN horizons. Chunk 13 measured raising the opening as
+    # +3.4 points bounded and -6.9 open, so the two regimes want opposite
+    # things and only the open one is ours to fix. That leaves 281 games of the
+    # 473, and keeps the bounded gain that is already banked.
+    closing_offer_delta: float = 0.96
+    # Just above the 0.44 the field counters with, so it reads as a near-even
+    # split rather than a demand, and clears `never_concede_below` outright.
+    closing_offer_share: float = 0.50
+
     # Open-ended games have no forced endgame; pretend one exists here so the
     # concession schedule still moves.
     unbounded_soft_horizon: int = 12

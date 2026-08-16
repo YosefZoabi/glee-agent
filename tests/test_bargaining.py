@@ -829,3 +829,64 @@ class TestSeeingTheirClockMustNotMakeUsWorse:
         for d_me in (0.8, 0.9, 0.95, 1.0):
             for d_them in (0.8, 0.9, 0.95, 1.0):
                 assert self._open(d_me, d_them) <= P.final_round_demand + 1e-9
+
+
+class TestClosingInsteadOfHaggling:
+    """An impatient proposer with no deadline opens at a signable number.
+
+    Measured over 1,469 games: our openings are accepted 4-10% of the time
+    whether we ask 0.65 or 0.85, and the field concedes a median +0.0000 per
+    round. So the inflated opening buys nothing except the round of inflation
+    it takes them to counter -- 281 open-horizon games where we opened ~0.66,
+    they countered ~0.44, and we signed that counter one round poorer.
+    """
+
+    def _open(self, d_me, *, max_rounds=None, ci=False, d_them=None, pot=1_000_000):
+        return play(bargaining_game(
+            slot="player_2", money=pot, round_=1, max_rounds=max_rounds,
+            delta_1=d_them if d_them is not None else d_me, delta_2=d_me,
+            complete_information=ci,
+        ))["bob_gain"] / pot
+
+    def test_an_impatient_open_horizon_opens_at_the_closing_share(self):
+        for delta in (0.8, 0.9, 0.95):
+            assert self._open(delta) == pytest.approx(P.closing_offer_share)
+
+    def test_a_known_deadline_is_left_alone(self):
+        # Chunk 13 measured the opposite sign here: raising the bounded opening
+        # was worth +3.4 points. Closing must not spend that.
+        for delta in (0.8, 0.9, 0.95):
+            assert self._open(delta, max_rounds=12) > P.closing_offer_share
+
+    def test_a_patient_proposer_is_left_alone(self):
+        # Delay is free at 1.0, so there is no round of inflation to save and
+        # the endgame sweep is worth far more than closing early.
+        assert self._open(1.0) > P.closing_offer_share
+
+    def test_it_never_undercuts_what_we_would_hold_out_for(self):
+        # We are the patient side and can see it: the equilibrium share is real
+        # here, and `hold_out_value` has to floor the closing number.
+        patient = self._open(0.95, ci=True, d_them=0.8)
+        assert patient > P.closing_offer_share
+
+    def test_it_never_offers_below_the_floor_we_defend(self):
+        assert self._open(0.5) >= P.never_concede_below
+
+    def test_the_closing_offer_says_why_it_should_be_signed(self):
+        action = play(bargaining_game(
+            slot="player_2", money=1_000_000, round_=1, max_rounds=None,
+            delta_1=0.8, delta_2=0.8, complete_information=False,
+        ))
+        # The number is not what decides these games, so the text has to carry
+        # it: an even split, a refusal to improve, and a cost to countering.
+        assert "even split" in action["message"]
+        assert "not beat it later" in action["message"]
+        # Never advertise our own impatience -- it is an invitation to wait.
+        assert "inflation" not in action["message"].lower()
+
+    def test_a_bounded_game_keeps_its_ordinary_opening_message(self):
+        action = play(bargaining_game(
+            slot="player_2", money=1_000_000, round_=1, max_rounds=12,
+            delta_1=0.8, delta_2=0.8, complete_information=False,
+        ))
+        assert "even split" not in action["message"]

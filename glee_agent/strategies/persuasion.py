@@ -25,7 +25,7 @@ from __future__ import annotations
 import hashlib
 
 from ..gamestate import clamp, history, number
-from ..params import PERSUASION as P
+from ..params import PERSUASION as P, SEND_MESSAGES
 
 # Phrases a seller only writes when steering us away from a sale.
 _NEGATIVE_HINTS = (
@@ -326,7 +326,16 @@ def _seller_message(game: dict) -> dict:
     genuinely honest recommendations, which is a failure to convince, not a
     failure to signal.
     """
-    if not _seller_recommends(game):
+    recommends = _seller_recommends(game)
+    if not SEND_MESSAGES:
+        # Text mode is the same decision the binary half of these games sends as
+        # a bare yes/no, so it is sent as a bare yes/no. Nothing is argued, and
+        # nothing about us is volunteered. It cannot be empty: `safety.sanitize`
+        # refills an empty seller_message with the fallback pitch, which would
+        # put a sales line back on the wire.
+        return {"message": "Recommended." if recommends else "Not recommended."}
+
+    if not recommends:
         return {
             "message": (
                 "Straight answer: this one is not worth what I am asking. Sit this "

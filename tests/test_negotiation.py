@@ -330,3 +330,21 @@ class TestRungAwarePricing:
         # Pricing at exactly their valuation pays them nothing and buys a refusal.
         assert self._offer("seller", 120.0) < 150.0
         assert self._offer("buyer", 100.0) > 80.0
+
+
+class TestTheChannelIsNotUsed:
+    """We price as though the free-text channel were not there."""
+
+    def test_an_offer_carries_no_message(self):
+        assert "message" not in play(negotiation_game(messages_allowed=True))
+
+    def test_a_counter_carries_no_message(self):
+        action = play(negotiation_game(
+            action_type="decision", slot="player_1", my_value=100.0, round_=2,
+            messages_allowed=True,
+            last_offer={"price": 90.0, "from_player": "player_2", "round": 1},
+        ))
+        assert "message" not in action
+
+    def test_the_builders_still_work_if_the_judgement_is_reversed(self, messages_on):
+        assert "message" in play(negotiation_game(messages_allowed=True))

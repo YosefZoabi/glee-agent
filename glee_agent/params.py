@@ -178,7 +178,13 @@ class NegotiationParams:
     # 5th percentile it actually scores. The incomplete-information cells, which
     # this parameter cannot touch, matched across the two agents (33.6% vs
     # 34.6% bounded), which is what says the gap is the change and not the draw.
-    surplus_target: float = 0.59
+    # 0.59 -> 0.65 on a within-agent read: the same arm ran 0.59 then 0.65 over
+    # consecutive chunks and the deal rate went UP, not down -- bounded 97.3% ->
+    # 97.8%, open 96.2% -> 98.4% -- while the surplus taken rose 0.590 -> 0.650.
+    # The incomplete-information cells, which this cannot touch, moved 33.6% ->
+    # 32.5%, which is what says the comparison is sound. The edge is still
+    # somewhere above here; an arm is testing 0.72.
+    surplus_target: float = 0.65
 
     # Accept when the offer is at least this fraction of our current target
     # profit. Below 1.0 so we do not reject an offer that is one dollar shy.

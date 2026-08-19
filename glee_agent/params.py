@@ -171,7 +171,14 @@ class NegotiationParams:
     # Set conservatively below what the 40-50% band suggests is reachable. The
     # endgame rules are untouched, so the last rounds still take any positive
     # profit rather than book a $0.
-    surplus_target: float = 0.55
+    # Raised from 0.55 after a controlled read against an arm running 0.59.
+    # Complete-information bounded games went 0.550 -> 0.590 of the surplus at
+    # an unchanged deal rate (96.4% -> 96.9%), and open ones 0.500 -> 0.590 for
+    # 5.8 points of deal rate -- still positive once a no-deal is priced at the
+    # 5th percentile it actually scores. The incomplete-information cells, which
+    # this parameter cannot touch, matched across the two agents (33.6% vs
+    # 34.6% bounded), which is what says the gap is the change and not the draw.
+    surplus_target: float = 0.59
 
     # Accept when the offer is at least this fraction of our current target
     # profit. Below 1.0 so we do not reject an offer that is one dollar shy.

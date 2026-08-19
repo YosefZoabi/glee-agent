@@ -48,7 +48,7 @@ from ..gamestate import (
     rounds_left,
     split_exactly,
 )
-from ..params import BARGAINING as P
+from ..params import BARGAINING as P, SEND_MESSAGES
 
 # Past this many rounds the finite-horizon recursion has converged on the
 # infinite-horizon fixed point, so we switch to the closed form.
@@ -414,7 +414,7 @@ def _make_offer(game: dict) -> dict:
         action = {"alice_gain": mine, "bob_gain": theirs}
     else:
         action = {"alice_gain": theirs, "bob_gain": mine}
-    if messages_allowed(game):
+    if SEND_MESSAGES and messages_allowed(game):
         # The endgame branches above can overwrite `demand` outright, so the
         # closing message is only honest if the closing rule is still what set
         # the number we are actually sending.

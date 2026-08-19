@@ -357,8 +357,44 @@ class TestRegimeAndNonBuyer:
         assert buyer_ignores_us(game) is False
 
 
+class TestTheTextChannelSaysOnlyYesOrNo:
+    """Shipped behaviour: text mode carries the recommendation and nothing else.
+
+    Half of these games use a `binary` channel that is already a bare yes/no.
+    The other half use `text`, where the message is the whole move -- so it
+    sends the same yes/no, with none of the pitch that used to ride along.
+    """
+
+    def _msg(self, quality, **kw):
+        history = [persuasion_round(round_=r, message="yes", bought=True, quality="high")
+                   for r in range(1, 6)]
+        game = persuasion_game(
+            action_type="seller_message", slot="player_1", quality=quality,
+            p=kw.get("p", 0.9), v=kw.get("v", 125), u=0.0, price=kw.get("price", 100),
+            round_=6, total_rounds=20, history=history,
+        )
+        return play(game)["message"]
+
+    def test_a_recommendation_is_bare(self):
+        assert self._msg("high") == "Recommended."
+
+    def test_a_refusal_is_bare(self):
+        assert self._msg("low", p=0.3, v=100, price=60) == "Not recommended."
+
+    def test_nothing_about_us_or_the_numbers_goes_on_the_wire(self):
+        for text in (self._msg("high"), self._msg("low", p=0.3, v=100, price=60)):
+            for leak in ("125", "100", "record", "arithmetic", "track", "costs you"):
+                assert leak not in text.lower()
+
+    def test_it_is_never_empty(self):
+        # An empty seller_message is refilled by safety.sanitize with the
+        # fallback pitch, which would put a sales line back on the wire.
+        for text in (self._msg("high"), self._msg("low", p=0.3, v=100, price=60)):
+            assert text.strip()
+
+
 class TestSellerMessageCarriesEvidence:
-    def test_states_the_verifiable_record(self):
+    def test_states_the_verifiable_record(self, messages_on):
         history = [persuasion_round(round_=r, message="yes", bought=True, quality="high")
                    for r in range(1, 6)]
         game = persuasion_game(
@@ -368,7 +404,7 @@ class TestSellerMessageCarriesEvidence:
         message = play(game)["message"]
         assert "5 of my 5" in message
 
-    def test_gives_the_buyer_their_own_arithmetic(self):
+    def test_gives_the_buyer_their_own_arithmetic(self, messages_on):
         game = persuasion_game(
             action_type="seller_message", slot="player_1", quality="high",
             p=0.9, v=125, u=0.0, price=100, round_=1, total_rounds=20,
@@ -376,7 +412,7 @@ class TestSellerMessageCarriesEvidence:
         message = play(game)["message"]
         assert "125" in message and "100" in message and "25" in message
 
-    def test_a_refusal_is_still_plainly_a_refusal(self):
+    def test_a_refusal_is_still_plainly_a_refusal(self, messages_on):
         game = persuasion_game(
             action_type="seller_message", slot="player_1", quality="low",
             p=0.3, v=100, u=0.0, price=60, round_=2, total_rounds=20,

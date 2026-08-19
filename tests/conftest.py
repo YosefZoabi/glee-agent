@@ -33,3 +33,17 @@ def schedule_only(monkeypatch):
     from glee_agent.strategies import negotiation
     monkeypatch.setattr(negotiation, "P",
                         dataclasses.replace(params.NEGOTIATION, rung_aware=False))
+
+
+@pytest.fixture
+def messages_on(monkeypatch):
+    """Re-enable the free-text channel for one test.
+
+    We ship playing every family as though messages did not exist, but the
+    builders stay in the tree behind `SEND_MESSAGES` and still have to work if
+    that judgement is ever reversed. Each strategy binds the flag by value at
+    import, so it is set on the strategy module rather than on `params`.
+    """
+    from glee_agent.strategies import bargaining, negotiation, persuasion
+    for module in (bargaining, negotiation, persuasion):
+        monkeypatch.setattr(module, "SEND_MESSAGES", True)

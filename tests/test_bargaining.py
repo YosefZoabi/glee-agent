@@ -70,7 +70,13 @@ class TestOffers:
         action = play(bargaining_game(round_=1, max_rounds=6, money=1000))
         assert action["bob_gain"] > 0
 
-    def test_message_omitted_when_the_game_forbids_them(self):
+    def test_no_message_is_ever_sent(self):
+        # We play as though the channel were not there, so a game that ALLOWS
+        # messages gets one just as silent as a game that forbids them.
+        assert "message" not in play(bargaining_game(messages_allowed=False))
+        assert "message" not in play(bargaining_game(messages_allowed=True))
+
+    def test_message_omitted_when_the_game_forbids_them(self, messages_on):
         assert "message" not in play(bargaining_game(messages_allowed=False))
         assert "message" in play(bargaining_game(messages_allowed=True))
 
@@ -449,7 +455,7 @@ class TestCounteringASweeper:
         assert opponent_is_sweeping(game, "player_2") is False
         assert play(game)["decision"] == "reject"
 
-    def test_says_so_out_loud(self):
+    def test_says_so_out_loud(self, messages_on):
         game = bargaining_game(
             slot="player_2", money=1000, round_=8, max_rounds=11,
             delta_1=1.0, delta_2=1.0, complete_information=False,
@@ -872,7 +878,7 @@ class TestClosingInsteadOfHaggling:
     def test_it_never_offers_below_the_floor_we_defend(self):
         assert self._open(0.5) >= P.never_concede_below
 
-    def test_the_closing_offer_says_why_it_should_be_signed(self):
+    def test_the_closing_offer_says_why_it_should_be_signed(self, messages_on):
         action = play(bargaining_game(
             slot="player_2", money=1_000_000, round_=1, max_rounds=None,
             delta_1=0.8, delta_2=0.8, complete_information=False,
@@ -884,7 +890,7 @@ class TestClosingInsteadOfHaggling:
         # Never advertise our own impatience -- it is an invitation to wait.
         assert "inflation" not in action["message"].lower()
 
-    def test_a_bounded_game_keeps_its_ordinary_opening_message(self):
+    def test_a_bounded_game_keeps_its_ordinary_opening_message(self, messages_on):
         action = play(bargaining_game(
             slot="player_2", money=1_000_000, round_=1, max_rounds=12,
             delta_1=0.8, delta_2=0.8, complete_information=False,

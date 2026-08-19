@@ -33,7 +33,7 @@ from ..gamestate import (
     progress,
     rounds_left,
 )
-from ..params import NEGOTIATION as P
+from ..params import NEGOTIATION as P, SEND_MESSAGES
 
 
 def _role(state: dict, slot: str) -> str:
@@ -273,7 +273,7 @@ def _make_offer(game: dict) -> dict:
     role = _role(state, slot)
     price = _bounded_price(game, state, slot, role, _target_price(state, slot, role))
     action = {"product_price": price}
-    if messages_allowed(game):
+    if SEND_MESSAGES and messages_allowed(game):
         action["message"] = _offer_message(role, progress(state, P.unbounded_soft_horizon))
     return action
 
@@ -332,7 +332,7 @@ def _make_decision(game: dict) -> dict:
         return {"decision": "AcceptOffer"}
 
     action = {"decision": "RejectOffer", "product_price": counter}
-    if messages_allowed(game):
+    if SEND_MESSAGES and messages_allowed(game):
         action["message"] = _counter_message(role, progress(state, P.unbounded_soft_horizon))
     return action
 

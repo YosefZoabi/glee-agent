@@ -288,6 +288,21 @@ class PersuasionParams:
     trust_negative_signal: bool = True
 
 
+# Every family is played as though the free-text channel did not exist.
+#
+# In bargaining and negotiation the message rides alongside a number that says
+# the same thing, so dropping it costs nothing and removes a channel we were
+# using to volunteer things about ourselves -- the schedule told a 0%-inflation
+# opponent that "every round shrinks the pot for both of us", which is a claim
+# of time pressure we do not have, made to the only side that does.
+#
+# Persuasion is not the same shape. Half its rounds use a `binary` channel that
+# is already a bare yes/no with no text at all; the other half use `text`, where
+# the message IS the move and there is no number to send instead -- an empty one
+# is refilled by `safety.sanitize` rather than sent. So text mode carries the
+# recommendation and nothing else, which is exactly what the binary half sends.
+SEND_MESSAGES = False
+
 BARGAINING = BargainingParams()
 NEGOTIATION = NegotiationParams()
 PERSUASION = PersuasionParams()

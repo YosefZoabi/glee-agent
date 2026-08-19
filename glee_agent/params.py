@@ -191,6 +191,33 @@ class NegotiationParams:
     # offered yet, so no other number in the state can set the scale.
     default_scale: float = 100.0
 
+    # --- Pricing against a known pool -------------------------------------
+    # Valuations are not continuous. Every negotiation game we have ever played
+    # draws both values from {80, 100, 120, 150} times one of three scales, and
+    # 3,510 incomplete-information games contained not a single off-pool value.
+    # Roles are assigned independently of the values, so the opponent sits on a
+    # uniform draw over the same four rungs and a surplus exists in only 37.5%
+    # of games -- which is why our 36.1% deal rate is already 96% of the
+    # ceiling, and why the remaining money is in the PRICE, not the close.
+    #
+    # The lever: a deal is possible only when their rung is above ours (selling)
+    # or below ours (buying). Conditioning on that collapses the posterior, and
+    # at the rung next to the end of the pool it collapses to a single number --
+    # a seller holding 120 can only ever trade with a buyer holding 150. Asking
+    # just under 150 there costs nothing, because every other draw was
+    # unwinnable regardless of what we asked. We currently ask 1.06 x our own
+    # value and take 34.6% of that surplus.
+    #
+    # Off by default. `rung_aware` is the whole switch.
+    rung_aware: bool = False
+    # Leave this much of the target rung to the opponent so signing beats
+    # walking. Their best offer reaches a median 1.06x their own valuation, so
+    # they do not need much, but they do need something visible.
+    # Complete-information games close at 96%+ while leaving the opponent 41%
+    # of the surplus, so 6% was not a number anyone had earned. Start where we
+    # still take the large majority and let the arm find the edge.
+    rung_shade: float = 0.15
+
     # Identical prices in a row before we read the opponent as done negotiating
     # and take what is on the table. Replayed over every negotiation game we
     # have: at 6 it rescues the one open-ended game we ground to a 0-0 at the

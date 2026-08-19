@@ -89,6 +89,100 @@ def opponent_has_stopped_moving(state: dict, slot: str) -> bool:
     return len(set(prices[-P.stonewall_offers:])) == 1
 
 
+# Valuations are drawn from four rungs on one of three scales. See
+# `rung_aware` in params for the evidence; this is just the arithmetic.
+RUNG_SHAPE = (80.0, 100.0, 120.0, 150.0)
+RUNG_SCALES = (1.0, 100.0, 10000.0)
+
+
+def pool_position(value: float | None) -> tuple[int, float] | None:
+    """Which rung and scale a valuation sits on, or None if it is off-pool.
+
+    Returns None rather than guessing: a value we cannot place is a value whose
+    pool we do not know, and every caller falls back to the ordinary schedule.
+    """
+    if not value or value <= 0:
+        return None
+    for scale in RUNG_SCALES:
+        for index, rung in enumerate(RUNG_SHAPE):
+            if abs(value - rung * scale) <= max(1e-6, rung * scale * 1e-6):
+                return index, scale
+    return None
+
+
+def tradable_rungs(state: dict, slot: str, role: str) -> list[float] | None:
+    """Opponent valuations that could actually produce a deal, best first.
+
+    A seller can only trade with a buyer valuing the item higher, and a buyer
+    only with a seller valuing it lower, so conditioning on "a deal exists at
+    all" throws away every other rung. What is left is the entire set of worlds
+    worth pricing for -- in the rest we score zero whatever we do, which is
+    exactly why aiming at the top of this list is free.
+    """
+    placed = pool_position(number(state, f"{slot}_value", None))
+    if placed is None:
+        return None
+    index, scale = placed
+    rungs = [rung * scale for rung in RUNG_SHAPE]
+    live = rungs[index + 1:] if role == "seller" else rungs[:index]
+    if not live:
+        return []                      # the seat itself is untradable
+    # Their own offers bound them further, but only loosely: measured against
+    # recovered valuations their best offer runs to a median 1.06x their true
+    # value, so a hard elimination would be wrong about half the time. Only
+    # discard a rung the offer beats by more than that observed overshoot.
+    prices = _their_prices(state, slot)
+    if prices:
+        if role == "seller":
+            floor_ = max(prices) / 1.10
+            live = [r for r in live if r >= floor_] or live
+        else:
+            ceiling = min(prices) * 1.10
+            live = [r for r in live if r <= ceiling] or live
+    return sorted(live, reverse=(role == "seller"))
+
+
+def _rung_price(state: dict, slot: str, role: str, my_value: float,
+                last_word: bool) -> float | None:
+    """Price aimed at one specific opponent valuation, or None to fall through.
+
+    With rounds in hand we walk the ladder from the most valuable tradable rung
+    down, because a rung refused costs only the round it took to ask. On the
+    last word there is no ladder left, so we take the rung with the best
+    expected value instead -- a refusal there pays zero.
+    """
+    live = tradable_rungs(state, slot, role)
+    if live is None:
+        return None
+    if not live:
+        return None                    # untradable seat: nothing to price for
+    shade = clamp(P.rung_shade, 0.0, 0.5)
+
+    def price_for(target: float) -> float:
+        room = abs(target - my_value)
+        return target - shade * room if role == "seller" else target + shade * room
+
+    if last_word or is_final_round(state):
+        # No ladder left, so take the rung with the best expected value. Aiming
+        # at the k-th best of n equally likely rungs closes whenever they sit at
+        # that rung OR any richer one, which is k chances in n -- asking for the
+        # very top pays most per deal and closes least often, and the product is
+        # what decides. Getting this backwards made the last offer jump back ABOVE
+        # the one before it, un-conceding on the one round that cannot be redone.
+        best, best_value = None, None
+        for rank, target in enumerate(live, start=1):
+            price = price_for(target)
+            gain = _profit(role, price, my_value) * (rank / len(live))
+            if best_value is None or gain > best_value:
+                best, best_value = price, gain
+        return best
+
+    left = rounds_left(state, P.unbounded_soft_horizon)
+    steps = max(1, (left - P.endgame_rounds) if left else P.unbounded_soft_horizon)
+    reached = int(progress(state, P.unbounded_soft_horizon) * len(live))
+    return price_for(live[min(reached, len(live) - 1)])
+
+
 def _target_price(state: dict, slot: str, role: str, last_word: bool = False) -> float:
     """The price we are holding out for this round.
 
@@ -117,6 +211,11 @@ def _target_price(state: dict, slot: str, role: str, last_word: bool = False) ->
         # the midpoint the schedule used to stop at -- see `surplus_target`.
         target = my_value + P.surplus_target * span
         return best + (target - best) * t
+
+    if P.rung_aware:
+        priced = _rung_price(state, slot, role, my_value, last_word)
+        if priced is not None:
+            return priced
 
     scale = _scale(state, my_value)
     if role == "seller":

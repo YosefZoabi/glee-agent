@@ -257,3 +257,73 @@ class TestTheScheduleNoLongerAimsAtTheMedian:
             last_offer={"price": 8100, "from_player": "player_2", "round": 10},
         )
         assert play(game)["decision"] == "AcceptOffer"
+
+
+class TestRungAwarePricing:
+    """Valuations come from a four-rung pool, so the opponent is not unknown.
+
+    Every negotiation game draws both valuations from {80, 100, 120, 150} times
+    one of three scales -- 3,510 incomplete-information games contained zero
+    off-pool values. Roles are assigned independently of the values, so a deal
+    exists only when their rung is above ours selling, or below ours buying.
+    Conditioning on that is what turns "unknown opponent" into a short list.
+    """
+
+    def _offer(self, role, value, round_=1, max_rounds=10, history=None):
+        slot = "player_1" if role == "seller" else "player_2"
+        game = negotiation_game(slot=slot, my_value=value, round_=round_,
+                                max_rounds=max_rounds, history=history or [])
+        return play(game)["product_price"]
+
+    def test_off_by_default(self):
+        assert P.rung_aware is False
+
+    def test_a_seller_one_rung_down_knows_the_buyer_exactly(self, rung_aware):
+        # Holding 120, the only buyer we can ever trade with holds 150. Every
+        # other draw pays zero whatever we ask, so we ask against 150.
+        price = self._offer("seller", 120.0)
+        assert 120.0 < price < 150.0
+        assert price > 140.0                      # aimed at 150, not at our own value
+
+    def test_a_buyer_one_rung_up_knows_the_seller_exactly(self, rung_aware):
+        price = self._offer("buyer", 100.0)
+        assert 80.0 < price < 100.0
+        assert price < 90.0                       # aimed at 80, not at our own value
+
+    def test_it_scales_with_the_pool(self, rung_aware):
+        small = self._offer("seller", 120.0)
+        large = self._offer("seller", 1_200_000.0)
+        assert large == pytest.approx(small * 10_000.0, rel=1e-6)
+
+    def test_the_ladder_walks_down_as_rounds_pass(self, rung_aware):
+        early = self._offer("seller", 80.0, round_=1)
+        late = self._offer("seller", 80.0, round_=8)
+        assert late < early                       # asks only ever come down
+
+    def test_an_untradable_seat_falls_back_to_the_schedule(self, rung_aware):
+        # A seller already holding the top rung can never meet a richer buyer.
+        # There is nothing to price for, so the ordinary schedule takes over
+        # rather than the ladder inventing a target that does not exist.
+        from glee_agent.strategies.negotiation import tradable_rungs
+        state = negotiation_game(slot="player_1", my_value=150.0)["game_state"]
+        assert tradable_rungs(state, "player_1", "seller") == []
+        assert self._offer("seller", 150.0) > 150.0
+
+    def test_an_off_pool_value_falls_back_to_the_schedule(self, rung_aware):
+        from glee_agent.strategies.negotiation import pool_position
+        assert pool_position(137.0) is None
+        assert self._offer("seller", 137.0) > 137.0
+
+    def test_the_last_offer_never_un_concedes(self, rung_aware):
+        # The final round picks the best-expected-value rung, which can sit
+        # above where the ladder had already walked to. Monotonicity has to
+        # win: raising the ask on the one round that cannot be redone is how
+        # a won game becomes a zero.
+        history = [{"offer": {"from_player": "player_1", "price": 97.0, "round": 8}}]
+        price = self._offer("seller", 80.0, round_=10, max_rounds=10, history=history)
+        assert price <= 97.0
+
+    def test_we_still_leave_them_a_reason_to_sign(self, rung_aware):
+        # Pricing at exactly their valuation pays them nothing and buys a refusal.
+        assert self._offer("seller", 120.0) < 150.0
+        assert self._offer("buyer", 100.0) > 80.0

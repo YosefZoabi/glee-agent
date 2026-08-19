@@ -214,8 +214,13 @@ class NegotiationParams:
     # unwinnable regardless of what we asked. We currently ask 1.06 x our own
     # value and take 34.6% of that surplus.
     #
-    # Off by default. `rung_aware` is the whole switch.
-    rung_aware: bool = False
+    # Measured live 2026-08-19 against an arm identical but for this flag: in
+    # incomplete-information games it took 0.722 of the surplus against 0.478
+    # (+3.9 sigma, n=30/35) with both sides closing 100% of the games that had
+    # a surplus to close. The complete-information cells, which this flag cannot
+    # reach, drifted +1.8 sigma on the same draw, so differencing that out as
+    # pure luck still leaves +1.8 sigma. On by default from that run.
+    rung_aware: bool = True
     # Leave this much of the target rung to the opponent so signing beats
     # walking. Their best offer reaches a median 1.06x their own valuation, so
     # they do not need much, but they do need something visible.

@@ -275,10 +275,11 @@ class TestRungAwarePricing:
                                 max_rounds=max_rounds, history=history or [])
         return play(game)["product_price"]
 
-    def test_off_by_default(self):
+    def test_on_by_default(self):
         # Guards the SHIPPED default. An arm that deliberately flips the
         # switch is expected to fail exactly this one test and nothing else.
-        assert P.rung_aware is False
+        # Shipped on 2026-08-19 on +3.9 sigma of surplus in the cell it acts on.
+        assert P.rung_aware is True
 
     def test_a_seller_one_rung_down_knows_the_buyer_exactly(self, rung_aware):
         # Holding 120, the only buyer we can ever trade with holds 150. Every

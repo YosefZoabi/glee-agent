@@ -88,29 +88,29 @@ class TestTakeItOrLeaveIt:
     word. The horizon, not the clock, has to decide.
     """
 
-    def test_single_round_seller_prices_to_be_accepted(self):
+    def test_single_round_seller_prices_to_be_accepted(self, schedule_only):
         action = play(negotiation_game(slot="player_1", my_value=80, round_=1, max_rounds=1))
         # The floor multiple, not the 1.9x opening anchor that lost the game.
         assert action["product_price"] < 80 * P.seller_open_multiple
         assert action["product_price"] == pytest.approx(80 * P.seller_floor_multiple)
 
-    def test_single_round_buyer_prices_to_be_accepted(self):
+    def test_single_round_buyer_prices_to_be_accepted(self, schedule_only):
         action = play(negotiation_game(slot="player_2", my_value=100, round_=1, max_rounds=1))
         assert action["product_price"] > 100 * P.buyer_open_multiple
         assert action["product_price"] == pytest.approx(100 * P.buyer_floor_multiple)
 
-    def test_single_round_offer_is_still_profitable(self):
+    def test_single_round_offer_is_still_profitable(self, schedule_only):
         seller = play(negotiation_game(slot="player_1", my_value=80, round_=1, max_rounds=1))
         assert seller["product_price"] > 80
         buyer = play(negotiation_game(slot="player_2", my_value=100, round_=1, max_rounds=1))
         assert buyer["product_price"] < 100
 
-    def test_final_round_of_a_long_game_prices_the_same_way(self):
+    def test_final_round_of_a_long_game_prices_the_same_way(self, schedule_only):
         # Not a special case for max_rounds == 1: any last word is a last word.
         action = play(negotiation_game(slot="player_1", my_value=80, round_=6, max_rounds=6))
         assert action["product_price"] == pytest.approx(80 * P.seller_floor_multiple)
 
-    def test_a_real_horizon_still_opens_high(self):
+    def test_a_real_horizon_still_opens_high(self, schedule_only):
         # The fix must not flatten the schedule everywhere.
         action = play(negotiation_game(slot="player_1", my_value=80, round_=1, max_rounds=6))
         assert action["product_price"] > 80 * 1.5
@@ -276,6 +276,8 @@ class TestRungAwarePricing:
         return play(game)["product_price"]
 
     def test_off_by_default(self):
+        # Guards the SHIPPED default. An arm that deliberately flips the
+        # switch is expected to fail exactly this one test and nothing else.
         assert P.rung_aware is False
 
     def test_a_seller_one_rung_down_knows_the_buyer_exactly(self, rung_aware):

@@ -87,28 +87,15 @@ class BargainingParams:
     # break-even sits at 50%, so that is where a player who pays nothing to wait
     # should stand. Only ever a floor: `max` against the evidence bar.
     costless_hold_share: float = 0.50
-    # ...but that 0.50 was measured with the patience cells pooled, and they do
-    # not behave alike. Re-run with them split, over unbounded games only, what
-    # refusing an offer in a band finally paid:
+    # Raising this to 0.75 where their delta was VISIBLE was tried live against
+    # an arm holding 0.50, and lost: 0.5527 vs 0.6056 share in the treatment
+    # cell, -1.4 sigma, with all three control cells matched inside 0.005. The
+    # refusal bands that motivated it were selection, not causation -- we only
+    # refuse a 70% offer when the opponent is already collapsing.
     #
-    #   their delta VISIBLE and no worse than ours
-    #     refused 0.50-0.55   n=206   ended 0.594  (+0.069)   0% no-deal
-    #     refused 0.65-0.75   n= 94   ended 0.949  (+0.249)   0% no-deal
-    #   their delta HIDDEN, ours 1.0
-    #     refused 0.65-0.75   n= 93   ended 0.000  (-0.700) 100% no-deal
-    #
-    # Same behaviour, opposite outcome, and averaging the two is what produced a
-    # single flat floor. Holding out is nearly free when we can SEE they are the
-    # impatient one and ruinous when we are guessing -- which is also the honest
-    # reading of the 49 games that banked $0 and put the cap in `never_demand_above`
-    # in the first place: every one of them was an incomplete-information game.
-    # So the floor rises only where the deltas are facts.
-    # Set at the top of the evidenced band rather than its floor: the bar only
-    # ever REFUSES below itself, so 0.75 declines exactly the offers the 94
-    # refusals above covered, and nothing beyond them. Still under the 0.867
-    # Rubinstein share for this cell, so it is not asking for more than the
-    # structure supports.
-    costless_hold_share_informed: float = 0.75
+    # It could not have worked as built in any case: `never_demand_above` caps
+    # the continuation at 0.75, which already dominated, so the accept bar moved
+    # 66.5 -> 68.5. Any future attempt at this cell has to go at that cap.
 
     # --- Facing a sweeper -------------------------------------------------
     # The mirror image: THEY hold the last proposal and are stalling to it. Our

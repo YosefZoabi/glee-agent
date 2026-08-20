@@ -229,9 +229,20 @@ def _rung_price(state: dict, slot: str, role: str, my_value: float,
                 best, best_value = price, gain
         return best
 
-    left = rounds_left(state, P.unbounded_soft_horizon)
-    steps = max(1, (left - P.endgame_rounds) if left else P.unbounded_soft_horizon)
     reached = int(concession_clock(state, slot, role) * len(live))
+
+    # The clock alone can leave us priced at the top rung when the game is about
+    # to end. A rung refused only costs the round it took to ask WHEN there is
+    # another round -- past that it costs the whole game, and incomplete-
+    # information deal rates sit at 0.28-0.39 against a 0.377 ceiling. So the
+    # ladder also has a floor set by rounds actually remaining: with `usable`
+    # rounds left there is time to try at most `usable` more rungs, and the rest
+    # have to be skipped. This is what the `steps` variable computed here for
+    # three commits and never applied.
+    left = rounds_left(state, P.unbounded_soft_horizon)
+    if left is not None:
+        usable = max(1, left - P.endgame_rounds)
+        reached = max(reached, len(live) - min(len(live), usable))
     return price_for(live[min(reached, len(live) - 1)])
 
 

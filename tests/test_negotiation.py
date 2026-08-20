@@ -348,3 +348,50 @@ class TestTheChannelIsNotUsed:
 
     def test_the_builders_still_work_if_the_judgement_is_reversed(self, messages_on):
         assert "message" in play(negotiation_game(messages_allowed=True))
+
+
+class TestTheLastWordIsAnUltimatum:
+    """Rejecting our last offer pays them zero, so it is sliced to a crumb.
+
+    Measured over every last-word offer we have made: 216 sent, 216 signed,
+    including ten that left the opponent only 15-30%. The shade that protects a
+    mid-game offer buys nothing on a round they cannot answer.
+    """
+
+    def _ask(self, role, value, round_, max_rounds, **kw):
+        slot = "player_1" if role == "seller" else "player_2"
+        return play(negotiation_game(slot=slot, my_value=value, round_=round_,
+                                     max_rounds=max_rounds, **kw))["product_price"]
+
+    def test_a_selling_ultimatum_lands_just_under_a_rung(self, rung_aware):
+        price = self._ask("seller", 100.0, 10, 10)
+        assert 149.0 < price < 150.0          # just inside the 150 buyer, not 15% under
+
+    def test_a_buying_ultimatum_lands_just_over_a_rung(self, rung_aware):
+        price = self._ask("buyer", 150.0, 10, 10)
+        assert 100.0 < price < 101.0
+
+    def test_the_crumb_scales_with_the_pool(self, rung_aware):
+        assert 1_490_000 < self._ask("seller", 1_000_000.0, 10, 10) < 1_500_000
+
+    def test_a_tie_breaks_toward_the_rung_more_opponents_can_sign(self, rung_aware):
+        # A buyer on 120 has two live rungs and they tie exactly on expected
+        # value: the extra profit of aiming at 80 cancels the extra chance of
+        # aiming at 100. Breaking that toward 80 asks the ONE seller who could
+        # sign it for almost everything and writes off the other half of the
+        # pool on the round that cannot be redone.
+        assert 100.0 < self._ask("buyer", 120.0, 10, 10) < 101.0
+
+    def test_the_ultimatum_may_ask_more_than_the_offer_before_it(self, rung_aware):
+        # The mid-game ladder walks DOWN through the rungs while refusals are
+        # still affordable, so by the last round it can sit below the rung with
+        # the best expected value. Stepping back up there is correct and is not
+        # the un-conceding bug: a last offer is priced on what it is worth, not
+        # on what we happened to ask before it. The field bears it out -- 216
+        # last-word offers, 216 signed.
+        assert self._ask("seller", 100.0, 9, 10) < self._ask("seller", 100.0, 10, 10)
+
+    def test_a_mid_game_offer_keeps_its_shade(self, rung_aware):
+        # The crumb is for the ultimatum only: with rounds still in hand a
+        # refusal is affordable and the field refuses thin offers 78% of the time.
+        assert self._ask("seller", 120.0, 3, 10) < 149.0

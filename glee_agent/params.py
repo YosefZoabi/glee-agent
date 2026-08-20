@@ -250,6 +250,20 @@ class NegotiationParams:
     # of the surplus, so 6% was not a number anyone had earned. Start where we
     # still take the large majority and let the arm find the edge.
     rung_shade: float = 0.15
+    # ...but not when the offer is the last word. Rejecting an ultimatum pays
+    # them zero and signing pays them whatever we left, and the field does the
+    # arithmetic: 216 last-word offers, 216 signed, including 10 that left them
+    # only 15-30%. We were shading them 15% anyway, and 206 of those 216 handed
+    # over more than HALF the surplus on offers they could not refuse.
+    #
+    # Bargaining already proved the same point from the other side --
+    # `final_round_demand` takes 97% on the last round and the arm that tried
+    # leaving 12% instead came back a null.
+    #
+    # Held at 1% of the room rather than literally one unit: the pool spans
+    # three scales, so a flat 1 is 1.25% of the smallest rung and 0.0001% of the
+    # largest, which is not the same offer at all.
+    rung_last_word_shade: float = 0.01
 
     # Identical prices in a row before we read the opponent as done negotiating
     # and take what is on the table. Replayed over every negotiation game we

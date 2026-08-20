@@ -35,15 +35,27 @@ def schedule_only(monkeypatch):
                         dataclasses.replace(params.NEGOTIATION, rung_aware=False))
 
 
-@pytest.fixture
-def messages_on(monkeypatch):
-    """Re-enable the free-text channel for one test.
-
-    We ship playing every family as though messages did not exist, but the
-    builders stay in the tree behind `SEND_MESSAGES` and still have to work if
-    that judgement is ever reversed. Each strategy binds the flag by value at
-    import, so it is set on the strategy module rather than on `params`.
-    """
+def _set_messages(monkeypatch, value):
+    """Each strategy binds SEND_MESSAGES by value at import, so the flag is set
+    on the strategy module rather than on `params`."""
     from glee_agent.strategies import bargaining, negotiation, persuasion
     for module in (bargaining, negotiation, persuasion):
-        monkeypatch.setattr(module, "SEND_MESSAGES", True)
+        monkeypatch.setattr(module, "SEND_MESSAGES", value)
+
+
+@pytest.fixture
+def messages_on(monkeypatch):
+    """Force the free-text channel on, whatever the build ships."""
+    _set_messages(monkeypatch, True)
+
+
+@pytest.fixture
+def messages_off(monkeypatch):
+    """Force the silent build on, whatever the build ships.
+
+    The silent path stays exercised even while messages ship on, so flipping
+    `SEND_MESSAGES` produces exactly one failure -- the test that guards the
+    default -- instead of a scatter of failures for behaviour changed on
+    purpose.
+    """
+    _set_messages(monkeypatch, False)

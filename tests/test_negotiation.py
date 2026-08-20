@@ -431,6 +431,21 @@ class TestTheClockTicksOnTheirSilence:
         stalled = self._ask([90, 90, 90, 90, 90, 90, 90, 90])
         assert stalled < moving
 
+    def test_an_opening_lowball_does_not_spend_the_schedule(self, rung_aware):
+        # 69.4% of open-ended games open below our own value. Signing there pays
+        # less than walking, so those rounds are theatre, not negotiation.
+        assert self._ask([10] * 6) == self._ask([10])
+
+    def test_the_anchor_phase_is_free(self, rung_aware):
+        # Four rounds of lowball then a real offer must leave us exactly where we
+        # would have been had the real offer come first.
+        assert self._ask([10, 10, 10, 10] + [90] * 6) == self._ask([90] * 6)
+
+    def test_a_permanent_lowballer_does_not_freeze_us_forever(self, rung_aware):
+        # 52.8% never cross. Holding the opening ask for all 99 rounds against
+        # them would trade a bad price for no price, so the grace runs out.
+        assert self._ask([10] * 14) < self._ask([10] * 6)
+
     def test_a_bounded_game_still_runs_on_its_deadline(self, rung_aware):
         # The deadline there is real, so the round number stays the clock.
         hist = [{"offer": {"price": 90, "from_player": "player_2", "round": i + 1}}

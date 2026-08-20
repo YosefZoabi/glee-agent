@@ -166,6 +166,20 @@ def concession_clock(state: dict, slot: str, role: str) -> float:
     if state.get("horizon_known", False) and number(state, "max_rounds", None):
         return progress(state, P.unbounded_soft_horizon)
     prices = _their_prices(state, slot)
+    if len(prices) < 2:
+        return 0.0
+
+    # Skip the opening anchor phase -- see `anchor_grace`. The clock starts on
+    # their first real offer, or once the grace has run out and it is clear no
+    # real offer is coming.
+    my_value = number(state, f"{slot}_value", None)
+    if my_value is not None:
+        real = (lambda x: x > my_value) if role == "seller" else (lambda x: x < my_value)
+        if not real(prices[0]):
+            crossed = next((i for i, x in enumerate(prices) if real(x)), None)
+            start = crossed if crossed is not None else min(len(prices) - 1, P.anchor_grace)
+            prices = prices[start:]
+
     stalled = sum(
         1 for prev, cur in zip(prices, prices[1:])
         if not (cur > prev if role == "seller" else cur < prev)

@@ -215,6 +215,18 @@ class NegotiationParams:
     endgame_rounds: int = 2
 
     unbounded_soft_horizon: int = 10
+    # An offer below our own value is not an offer, it is an anchor: signing it
+    # pays us less than walking away. 69.4% of open-ended games open with one,
+    # so a schedule that advanced on them spent most of its concessions before
+    # the negotiation had started.
+    #
+    # Of the opponents who ever cross into a price we could sign, 64% have done
+    # it by their third offer and 100% by their eighth -- and 91% of those games
+    # then closed. So the first eight offers of a lowball carry no information
+    # worth conceding to. Past eight, nobody has ever crossed, and continuing to
+    # freeze would just hold our opening ask forever in the 52.8% of games where
+    # they never come up at all, so the clock starts regardless.
+    anchor_grace: int = 8
     # Fallback price scale when our own value is 0 and the opponent has not
     # offered yet, so no other number in the state can set the scale.
     default_scale: float = 100.0

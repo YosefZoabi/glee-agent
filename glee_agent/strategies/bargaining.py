@@ -251,6 +251,13 @@ def costless_hold_value(state: dict, slot: str) -> float:
     delta_me, _ = _deltas(state, slot)
     if delta_me < P.costless_delay_delta or rounds_left(state, 0) is not None:
         return 0.0
+    # `_deltas` fills a hidden opponent delta in with our own, so ask the state
+    # directly rather than trusting that fallback -- the whole point here is
+    # whether their impatience is a fact or a guess.
+    if state.get("complete_information", False):
+        their_delta = number(state, _DELTA_KEY[OPPOSITE[slot]], None)
+        if their_delta is not None and their_delta <= delta_me:
+            return P.costless_hold_share_informed
     return P.costless_hold_share
 
 

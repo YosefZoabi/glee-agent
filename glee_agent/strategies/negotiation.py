@@ -156,13 +156,14 @@ def _rung_price(state: dict, slot: str, role: str, my_value: float,
         return None
     if not live:
         return None                    # untradable seat: nothing to price for
-    shade = clamp(P.rung_shade, 0.0, 0.5)
+    final = last_word or is_final_round(state)
+    shade = clamp(P.rung_last_word_shade if final else P.rung_shade, 0.0, 0.5)
 
     def price_for(target: float) -> float:
         room = abs(target - my_value)
         return target - shade * room if role == "seller" else target + shade * room
 
-    if last_word or is_final_round(state):
+    if final:
         # No ladder left, so take the rung with the best expected value. Aiming
         # at the k-th best of n equally likely rungs closes whenever they sit at
         # that rung OR any richer one, which is k chances in n -- asking for the
@@ -173,7 +174,13 @@ def _rung_price(state: dict, slot: str, role: str, my_value: float,
         for rank, target in enumerate(live, start=1):
             price = price_for(target)
             gain = _profit(role, price, my_value) * (rank / len(live))
-            if best_value is None or gain > best_value:
+            # `>=` so a tie breaks toward the LATER rung, which is the one more
+            # opponents can sign. Two rungs tie whenever the extra profit of
+            # aiming higher exactly cancels the extra chance of aiming lower --
+            # common with two rungs live -- and breaking it toward the greedier
+            # one made our last offer worse than our previous one, un-conceding
+            # on the round that cannot be redone.
+            if best_value is None or gain >= best_value:
                 best, best_value = price, gain
         return best
 

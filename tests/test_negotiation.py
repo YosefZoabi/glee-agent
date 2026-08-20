@@ -455,3 +455,37 @@ class TestTheClockTicksOnTheirSilence:
         late = play(negotiation_game(slot="player_1", my_value=80.0, round_=8,
                                      max_rounds=10, history=hist))["product_price"]
         assert late < early
+
+
+class TestTheLadderFitsTheRoundsLeft:
+    """A rung refused costs one round -- but only while another round exists.
+
+    The clock alone can leave us priced at the top rung with the game about to
+    end, which is how incomplete-information deal rates ended up at 0.28-0.39
+    against a 0.377 ceiling. So the walk also has a floor set by rounds actually
+    remaining: with `usable` rounds there is time for at most `usable` more
+    rungs, and the rest are skipped.
+    """
+
+    def _ask(self, round_, max_rounds, my_value=80.0):
+        hist = [{"offer": {"price": 10, "from_player": "player_2", "round": i + 1}}
+                for i in range(round_)]
+        return play(negotiation_game(
+            slot="player_1", my_value=my_value, round_=round_, max_rounds=max_rounds,
+            history=hist,
+            last_offer={"price": 10, "from_player": "player_2", "round": round_},
+        ))["product_price"]
+
+    def test_a_short_game_starts_partway_down_the_ladder(self):
+        # Four rounds and three rungs: opening at the top cannot be walked off
+        # in time, so it opens lower.
+        assert self._ask(1, 4) < self._ask(1, 10)
+
+    def test_a_long_game_still_opens_at_the_top(self):
+        assert self._ask(1, 10) == self._ask(2, 10)
+
+    def test_the_cheapest_rung_is_reached_before_the_endgame(self):
+        # Whatever the horizon, we are on the most signable rung with rounds to
+        # spare rather than discovering it on the last one.
+        for mr in (4, 6, 10):
+            assert self._ask(mr - 1, mr) < self._ask(1, mr) or mr == 4

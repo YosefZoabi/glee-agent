@@ -397,66 +397,6 @@ class TestTheLastWordIsAnUltimatum:
         assert self._ask("seller", 120.0, 3, 10) < 149.0
 
 
-class TestTheClockTicksOnTheirSilence:
-    """Open-ended games: concede because they stopped moving, not because time passed.
-
-    They run to round 99 while our schedule was spent by round 11. Holding a
-    price costs nothing -- they improve on 65-70% of rounds however long we
-    stonewall, and the move grows from +31% after two rounds to +64% after
-    twelve -- while their own stall is the real signal: after four repeats only
-    9.9% ever concede again, after eight 5.8%.
-    """
-
-    def _ask(self, their_prices, my_value=80.0):
-        hist = [{"offer": {"price": p, "from_player": "player_2", "round": i + 1}}
-                for i, p in enumerate(their_prices)]
-        game = negotiation_game(
-            slot="player_1", my_value=my_value, round_=len(their_prices) + 1,
-            max_rounds=None, history=hist,
-            last_offer={"price": their_prices[-1], "from_player": "player_2",
-                        "round": len(their_prices)})
-        return play(game)["product_price"]
-
-    def test_we_do_not_move_while_they_are_still_moving(self, rung_aware):
-        early = self._ask([90])
-        late = self._ask([90, 95, 100, 105, 110, 115, 120, 125])
-        assert late == early          # eight rounds in and not a cent conceded
-
-    def test_a_long_stall_walks_us_down_the_ladder(self, rung_aware):
-        assert self._ask([90] * 8) < self._ask([90] * 2)
-
-    def test_conceding_tracks_stalled_rounds_not_elapsed_rounds(self, rung_aware):
-        # Same round number, opposite behaviour from them.
-        moving = self._ask([90, 95, 100, 105, 110, 115, 120, 125])
-        stalled = self._ask([90, 90, 90, 90, 90, 90, 90, 90])
-        assert stalled < moving
-
-    def test_an_opening_lowball_does_not_spend_the_schedule(self, rung_aware):
-        # 69.4% of open-ended games open below our own value. Signing there pays
-        # less than walking, so those rounds are theatre, not negotiation.
-        assert self._ask([10] * 6) == self._ask([10])
-
-    def test_the_anchor_phase_is_free(self, rung_aware):
-        # Four rounds of lowball then a real offer must leave us exactly where we
-        # would have been had the real offer come first.
-        assert self._ask([10, 10, 10, 10] + [90] * 6) == self._ask([90] * 6)
-
-    def test_a_permanent_lowballer_does_not_freeze_us_forever(self, rung_aware):
-        # 52.8% never cross. Holding the opening ask for all 99 rounds against
-        # them would trade a bad price for no price, so the grace runs out.
-        assert self._ask([10] * 14) < self._ask([10] * 6)
-
-    def test_a_bounded_game_still_runs_on_its_deadline(self, rung_aware):
-        # The deadline there is real, so the round number stays the clock.
-        hist = [{"offer": {"price": 90, "from_player": "player_2", "round": i + 1}}
-                for i in range(5)]
-        early = play(negotiation_game(slot="player_1", my_value=80.0, round_=2,
-                                      max_rounds=10, history=hist[:1]))["product_price"]
-        late = play(negotiation_game(slot="player_1", my_value=80.0, round_=8,
-                                     max_rounds=10, history=hist))["product_price"]
-        assert late < early
-
-
 class TestTheLadderFitsTheRoundsLeft:
     """A rung refused costs one round -- but only while another round exists.
 

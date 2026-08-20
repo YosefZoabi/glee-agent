@@ -142,50 +142,16 @@ def tradable_rungs(state: dict, slot: str, role: str) -> list[float] | None:
     return sorted(live, reverse=(role == "seller"))
 
 
-def concession_clock(state: dict, slot: str, role: str) -> float:
-    """How far to run the concession schedule, in [0, 1].
-
-    A bounded game has a real deadline, so the round number is the clock and
-    `progress` is right. An open-ended one has no deadline worth respecting: they
-    run to round 99 while our schedule spent itself by round 11, giving the whole
-    surplus away inside the first tenth of the game and then sitting at the floor
-    for eighty-eight rounds.
-
-    Measured over every open-ended game we have played, holding a price costs
-    nothing. They improve their offer on 65-70% of rounds however long we have
-    stonewalled -- 69.8% after two rounds, 67.5% after twelve -- and the size of
-    the move GROWS with the wait, from +31% to +64%. What does carry information
-    is THEM stalling: once their price has repeated four rounds running only 9.9%
-    ever concede again, and after eight, 5.8%.
-
-    So the clock ticks on their silence rather than on the round: it advances
-    only on rounds their offer failed to improve, and `unbounded_soft_horizon`
-    becomes "concede fully after this many stalled rounds" instead of "after this
-    many rounds".
-    """
-    if state.get("horizon_known", False) and number(state, "max_rounds", None):
-        return progress(state, P.unbounded_soft_horizon)
-    prices = _their_prices(state, slot)
-    if len(prices) < 2:
-        return 0.0
-
-    # Skip the opening anchor phase -- see `anchor_grace`. The clock starts on
-    # their first real offer, or once the grace has run out and it is clear no
-    # real offer is coming.
-    my_value = number(state, f"{slot}_value", None)
-    if my_value is not None:
-        real = (lambda x: x > my_value) if role == "seller" else (lambda x: x < my_value)
-        if not real(prices[0]):
-            crossed = next((i for i, x in enumerate(prices) if real(x)), None)
-            start = crossed if crossed is not None else min(len(prices) - 1, P.anchor_grace)
-            prices = prices[start:]
-
-    stalled = sum(
-        1 for prev, cur in zip(prices, prices[1:])
-        if not (cur > prev if role == "seller" else cur < prev)
-    )
-    return clamp(stalled / max(1.0, float(P.unbounded_soft_horizon)), 0.0, 1.0)
-
+# A stall-driven concession clock lived here: it advanced only on rounds their
+# offer failed to improve, with a grace period for opening lowballs. Both were
+# reverted after losing their own A/B -- open-ended deal rate 0.449 against a
+# control's 0.592, -1.74 sigma, with no surplus gain to show for it.
+#
+# The measurements that motivated them were survivorship. "They still move 67%
+# of the time however long we hold" was computed over games that CLOSED, because
+# an opponent's value is only recoverable from a completed deal -- so every game
+# where we held firm and they walked was invisible to it. The games the change
+# would go on to lose were exactly the ones missing from the evidence for it.
 
 def _rung_price(state: dict, slot: str, role: str, my_value: float,
                 last_word: bool) -> float | None:
@@ -229,7 +195,7 @@ def _rung_price(state: dict, slot: str, role: str, my_value: float,
                 best, best_value = price, gain
         return best
 
-    reached = int(concession_clock(state, slot, role) * len(live))
+    reached = int(progress(state, P.unbounded_soft_horizon) * len(live))
 
     # The clock alone can leave us priced at the top rung when the game is about
     # to end. A rung refused only costs the round it took to ask WHEN there is
@@ -260,7 +226,7 @@ def _target_price(state: dict, slot: str, role: str, last_word: bool = False) ->
     # On the final round there is no schedule left to run: this price is the
     # last word, and rejecting it pays $0. A one-round game is final on round 1,
     # where `progress` is still 0 -- so ask the horizon, not the clock.
-    t = 1.0 if (last_word or is_final_round(state)) else concession_clock(state, slot, role)
+    t = 1.0 if (last_word or is_final_round(state)) else progress(state, P.unbounded_soft_horizon)
 
     if opponent_value is not None:
         # Known zone of agreement: open just inside their limit, concede to the

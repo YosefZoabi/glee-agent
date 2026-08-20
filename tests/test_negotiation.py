@@ -335,10 +335,10 @@ class TestRungAwarePricing:
 class TestTheChannelIsNotUsed:
     """We price as though the free-text channel were not there."""
 
-    def test_an_offer_carries_no_message(self):
+    def test_an_offer_carries_no_message(self, messages_off):
         assert "message" not in play(negotiation_game(messages_allowed=True))
 
-    def test_a_counter_carries_no_message(self):
+    def test_a_counter_carries_no_message(self, messages_off):
         action = play(negotiation_game(
             action_type="decision", slot="player_1", my_value=100.0, round_=2,
             messages_allowed=True,

@@ -375,18 +375,24 @@ class TestTheTextChannelSaysOnlyYesOrNo:
         )
         return play(game)["message"]
 
-    def test_a_recommendation_is_bare(self):
+    def test_a_recommendation_is_bare(self, messages_off):
         assert self._msg("high") == "Recommended."
 
-    def test_a_refusal_is_bare(self):
+    def test_a_refusal_is_bare(self, messages_off):
         assert self._msg("low", p=0.3, v=100, price=60) == "Not recommended."
 
-    def test_nothing_about_us_or_the_numbers_goes_on_the_wire(self):
+    def test_nothing_about_us_or_the_numbers_goes_on_the_wire(self, messages_off):
         for text in (self._msg("high"), self._msg("low", p=0.3, v=100, price=60)):
             for leak in ("125", "100", "record", "arithmetic", "track", "costs you"):
                 assert leak not in text.lower()
 
-    def test_it_is_never_empty(self):
+    def test_the_shipped_default_sends_the_full_message(self):
+        # Guards the SHIPPED default. Flipping SEND_MESSAGES is expected to fail
+        # exactly this one test and nothing else.
+        from glee_agent import params
+        assert params.SEND_MESSAGES is True
+
+    def test_it_is_never_empty(self, messages_off):
         # An empty seller_message is refilled by safety.sanitize with the
         # fallback pitch, which would put a sales line back on the wire.
         for text in (self._msg("high"), self._msg("low", p=0.3, v=100, price=60)):

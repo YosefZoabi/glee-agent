@@ -70,7 +70,7 @@ class TestOffers:
         action = play(bargaining_game(round_=1, max_rounds=6, money=1000))
         assert action["bob_gain"] > 0
 
-    def test_no_message_is_ever_sent(self):
+    def test_no_message_is_ever_sent(self, messages_off):
         # We play as though the channel were not there, so a game that ALLOWS
         # messages gets one just as silent as a game that forbids them.
         assert "message" not in play(bargaining_game(messages_allowed=False))

@@ -301,7 +301,12 @@ class PersuasionParams:
 # the message IS the move and there is no number to send instead -- an empty one
 # is refilled by `safety.sanitize` rather than sent. So text mode carries the
 # recommendation and nothing else, which is exactly what the binary half sends.
-SEND_MESSAGES = False
+# Kept ON by explicit decision 2026-08-19. The seller half of persuasion is
+# measurably inert -- buyers bought 0.693 of the time when we recommended and
+# 0.689 when we did not, over 1,420 rounds -- but the bargaining and negotiation
+# halves were never measured, and turning the channel off everywhere left no
+# control to measure them with.
+SEND_MESSAGES = True
 
 BARGAINING = BargainingParams()
 NEGOTIATION = NegotiationParams()

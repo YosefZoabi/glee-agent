@@ -119,13 +119,12 @@ class TestTakeItOrLeaveIt:
         action = play(
             negotiation_game(slot="player_1", my_value=40, opponent_value=100, round_=1, max_rounds=1)
         )
-        # No rounds left to shade toward, so the schedule runs to its terminus.
-        # That used to be the midpoint (70.0); it is now `surplus_target` of the
-        # zone, because a schedule ending on an even split is aiming at the
-        # median outcome by construction. Still comfortably signable: at 73 the
-        # buyer keeps 27 of a 60-wide zone against 0 for refusing.
-        assert action["product_price"] == pytest.approx(40 + P.surplus_target * 60)
-        assert 40 < action["product_price"] < 100
+        # A one-round game is an ultimatum, so this is priced as one: refusing
+        # pays them zero and 216 of 216 last-word offers we have made were
+        # signed. It used to run to the midpoint (70.0), then to `surplus_target`
+        # (79.0); both handed back most of a zone they could not refuse.
+        assert action["product_price"] == pytest.approx(100 - P.rung_last_word_shade * 60)
+        assert 40 < action["product_price"] < 100      # still leaves them a crumb
 
 
 class TestAStandingOfferFromSomeoneWhoHasStoppedNegotiating:
@@ -217,30 +216,42 @@ class TestTheScheduleNoLongerAimsAtTheMedian:
     735 zeros only 5 (1%) ever had a profitable offer on the table.
     """
 
-    def _final_price(self, *, role, my_value, opponent_value):
+    def _final_price(self, *, role, my_value, opponent_value, round_=3, max_rounds=10):
         slot = "player_1" if role == "seller" else "player_2"
         return play(negotiation_game(
             slot=slot, my_value=my_value, opponent_value=opponent_value,
-            round_=1, max_rounds=1,
+            round_=round_, max_rounds=max_rounds,
         ))["product_price"]
+
+    def _ultimatum(self, *, role, my_value, opponent_value):
+        return self._final_price(role=role, my_value=my_value,
+                                 opponent_value=opponent_value, round_=1, max_rounds=1)
 
     def test_the_seller_lands_above_the_midpoint(self):
         price = self._final_price(role="seller", my_value=40, opponent_value=100)
         assert price > 70.0
-        assert price == pytest.approx(40 + P.surplus_target * 60)
+
+    def test_an_ultimatum_asks_for_the_whole_zone(self):
+        # A one-round game is an ultimatum: rejecting pays them zero, and 216 of
+        # 216 last-word offers we have made were signed. The schedule used to run
+        # from aggressive toward `surplus_target` as time passed, so it handed
+        # over its MOST generous price on the round they could not refuse.
+        price = self._ultimatum(role="seller", my_value=40, opponent_value=100)
+        assert price == pytest.approx(100 - P.rung_last_word_shade * 60)
+        buyer = self._ultimatum(role="buyer", my_value=100, opponent_value=40)
+        assert buyer == pytest.approx(40 + P.rung_last_word_shade * 60)
 
     def test_the_buyer_lands_below_the_midpoint(self):
         # Symmetric: `span` is negative for a buyer, so the same share moves the
         # price the other way. Getting this backwards would concede MORE.
         price = self._final_price(role="buyer", my_value=100, opponent_value=40)
         assert price < 70.0
-        assert price == pytest.approx(100 - P.surplus_target * 60)
 
     def test_both_roles_capture_the_same_share_of_surplus(self):
         seller = self._final_price(role="seller", my_value=40, opponent_value=100) - 40
         buyer = 100 - self._final_price(role="buyer", my_value=100, opponent_value=40)
         assert seller == pytest.approx(buyer)
-        assert seller / 60 == pytest.approx(P.surplus_target)
+        assert seller / 60 > 0.5           # above the midpoint, both seats alike
 
     def test_it_still_leaves_them_a_reason_to_sign(self):
         # The whole zone must never be taken -- they need positive profit or

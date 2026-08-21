@@ -493,9 +493,17 @@ class TestStonewallThreshold:
         assert self._bar(1.0) >= P.realistic_counter_share - 1e-9
 
     def test_matches_the_closed_form(self):
-        p, demand, delta = P.counter_success_rate, P.realistic_counter_share, 0.9
+        # `_bar` builds a game with a known horizon, so the demand it prices is
+        # the bounded one -- a deadline makes refusing safe, see
+        # `bounded_counter_share` for the measurement that split the two.
+        p, demand, delta = P.counter_success_rate, P.bounded_counter_share, 0.9
         expected = p * demand * delta / (1 - (1 - p) * delta ** 2)
         assert self._bar(0.9) == pytest.approx(expected)
+
+    def test_an_open_horizon_keeps_the_lower_demand(self):
+        open_bar = stonewall_threshold({"delta_2": 0.9, "horizon_known": False,
+                                        "round": 1}, "player_2")
+        assert open_bar < self._bar(0.9)
 
     def test_an_impatient_player_takes_the_stonewalled_offer(self):
         # The observed shape: they offer 18% and never move (15% 15% 16% 16% 16%
@@ -653,8 +661,14 @@ class TestTheDeadlineBeatsTheClosedForm:
                         "proposer": "player_2", "round": round_},
         )
 
-    def test_signs_the_offer_it_used_to_grind_past(self):
-        assert play(self._offer(0.498, round_=2))["decision"] == "accept"
+    def test_refuses_an_even_split_early_in_a_bounded_game(self):
+        # This used to sign at round 2. Measured live against an arm, a deadline
+        # is what makes refusing safe -- the endgame forces a deal either way --
+        # and the bounded delta-1.0 cell ran +0.110 (+1.61s) on payoff/pot when
+        # the bar was raised. The regression this class guards is about the
+        # ENDGAME, and `test_signs_the_72_percent_it_turned_down_at_round_ten`
+        # still holds it: near the deadline the bar collapses as it always did.
+        assert play(self._offer(0.498, round_=2))["decision"] == "reject"
 
     def test_signs_the_72_percent_it_turned_down_at_round_ten(self):
         assert play(self._offer(0.72, round_=10))["decision"] == "accept"
@@ -761,10 +775,14 @@ class TestWaitingIsFreeSoWaitLonger:
         for delta in (0.8, 0.9, 0.95):
             assert play(self._offer(0.48, delta=delta))["decision"] == "accept", delta
 
-    def test_a_known_horizon_is_untouched(self):
-        # Bounded games already have the endgame seat and the deadline cap; this
-        # floor is only for the case where neither exists.
-        assert play(self._offer(0.48, max_rounds=12))["decision"] == "accept"
+    def test_a_known_horizon_now_refuses_it_too(self):
+        # It used to accept here, on the reasoning that a bounded game already
+        # has the endgame seat. Measured live against an arm, the opposite holds:
+        # a deadline is exactly what makes refusing SAFE, because the endgame
+        # forces a deal either way. Bounded cells ran +0.080 (+2.20s) at delta
+        # 0.95 and +0.110 (+1.61s) at delta 1.0, while open cells at 0.9 and 0.95
+        # ran -0.082 and -0.065. See `bounded_counter_share`.
+        assert play(self._offer(0.48, max_rounds=12))["decision"] == "reject"
 
     def test_the_walk_down_still_breaks_a_deadlock(self):
         # The floor must not become the round-99 stalemate it replaced.

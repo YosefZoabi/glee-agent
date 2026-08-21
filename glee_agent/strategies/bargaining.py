@@ -319,7 +319,11 @@ def stonewall_threshold(state: dict, slot: str) -> float:
     """
     delta_me, _ = _deltas(state, slot)
     p = clamp(P.counter_success_rate, 0.0, 1.0)
-    demand = P.realistic_counter_share
+    # A known horizon makes refusing safe: the endgame forces a deal whatever we
+    # do, so holding out risks rounds rather than the whole game. Without one it
+    # risks the game. See `bounded_counter_share` for the measurement.
+    bounded = bool(state.get("horizon_known", False)) and number(state, "max_rounds", None)
+    demand = P.bounded_counter_share if bounded else P.realistic_counter_share
     denominator = 1.0 - (1.0 - p) * delta_me ** 2
     if denominator <= 1e-9:
         return demand

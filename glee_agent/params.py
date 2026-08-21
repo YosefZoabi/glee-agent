@@ -50,6 +50,20 @@ class BargainingParams:
     # The demand with the best observed acceptance -- our 40-49% asks landed 15%
     # of the time, everything above that essentially never.
     realistic_counter_share: float = 0.45
+    # ...but only where waiting is dangerous. Measured live against an arm that
+    # raised the bar everywhere, holding out per our own delta:
+    #
+    #   bounded  d0.95  +0.080 (+2.20s)    open  d0.9   -0.082 (-2.86s)
+    #   bounded  d1.0   +0.110 (+1.61s)    open  d0.95  -0.065 (-2.36s)
+    #   bounded  d0.8   +0.019 (+0.51s)    open  d0.8   -0.020 (-0.65s)
+    #   bounded  d0.9   -0.005 (-0.23s)    open  d1.0   +0.012 (+0.27s)
+    #
+    # A deadline makes refusing safe -- the endgame forces a deal either way --
+    # so the extra share is nearly free. With no deadline a refusal just burns
+    # discount rounds: the arm settled at round 6.0 against the control's 3.4.
+    # The one open cell that did not suffer is delta 1.0, where waiting really
+    # is free, which is the same boundary from the other side.
+    bounded_counter_share: float = 0.55
 
     # How many rounds a rejection really costs before the game settles. Theory
     # says one -- reject, propose, they accept -- but the field haggles: observed

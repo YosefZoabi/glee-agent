@@ -233,6 +233,17 @@ def _target_price(state: dict, slot: str, role: str, last_word: bool = False) ->
         # midpoint. Shading matters -- a price at exactly their valuation leaves
         # them zero profit and no reason to sign.
         span = opponent_value - my_value
+        if last_word or is_final_round(state):
+            # An ultimatum, and rejecting one pays them zero: 216 of 216 last-word
+            # offers we have ever made were signed. The schedule below runs from
+            # aggressive toward `surplus_target` as time passes, so t=1.0 handed
+            # them the most generous price of the whole game -- 0.650 of the zone
+            # on the one round they could not refuse, against 0.867 mid-game.
+            # This is the same correction the rung ladder got, which measured
+            # +2.68 sigma; complete-information games never received it because
+            # the crumb lives in `_rung_price`, which only runs when their value
+            # is hidden.
+            return opponent_value - P.rung_last_word_shade * span
         best = opponent_value - P.zopa_shade * span
         # Where the schedule lands. `my_value + share * span` is our share of the
         # surplus for either role: span is positive as a seller and negative as a

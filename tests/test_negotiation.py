@@ -429,3 +429,59 @@ class TestTheLadderFitsTheRoundsLeft:
         # spare rather than discovering it on the last one.
         for mr in (4, 6, 10):
             assert self._ask(mr - 1, mr) < self._ask(1, mr) or mr == 4
+
+
+class TestNotBlinking:
+    """Both flags ship OFF; the arm turns them on. Guards the default too."""
+
+    def _arm(self, monkeypatch, **kw):
+        import dataclasses
+        from glee_agent import params
+        from glee_agent.strategies import negotiation
+        monkeypatch.setattr(negotiation, "P",
+                            dataclasses.replace(params.NEGOTIATION, **kw))
+
+    def _stonewalled(self, my_value=100.0, their=None, round_=8, max_rounds=10):
+        # They have repeated the same price for six offers running.
+        hist = [{"offer": {"price": 110.0, "from_player": "player_2", "round": r}}
+                for r in range(1, 8)]
+        return negotiation_game(
+            action_type="decision", slot="player_1", my_value=my_value,
+            opponent_value=their, round_=round_, max_rounds=max_rounds, history=hist,
+            last_offer={"price": 110.0, "from_player": "player_2", "round": 7})
+
+    def test_both_flags_ship_off(self):
+        from glee_agent import params
+        assert params.NEGOTIATION.stonewall_respects_ultimatum is False
+        assert params.NEGOTIATION.known_zone_floor == 0.0
+
+    def test_by_default_we_still_fold_to_a_stonewaller(self):
+        assert play(self._stonewalled())["decision"] == "AcceptOffer"
+
+    def test_the_arm_holds_the_ultimatum_instead(self, monkeypatch):
+        # Two rounds left of ten with them proposing: the last word is ours, and
+        # 216 of 216 last-word offers we have made were accepted.
+        self._arm(monkeypatch, stonewall_respects_ultimatum=True)
+        assert play(self._stonewalled(round_=9))["decision"] != "AcceptOffer"
+
+    def test_the_arm_still_folds_when_the_last_word_is_theirs(self, monkeypatch):
+        self._arm(monkeypatch, stonewall_respects_ultimatum=True)
+        game = self._stonewalled(round_=8, max_rounds=10)
+        assert play(game)["decision"] == "AcceptOffer"
+
+    def test_the_known_zone_floor_refuses_a_thin_slice(self, monkeypatch):
+        # Selling at 100 to a buyer worth 200: a price of 110 is a tenth of the
+        # surplus, which is the cell we currently sign at 0.3132.
+        self._arm(monkeypatch, known_zone_floor=0.45)
+        game = self._stonewalled(my_value=100.0, their=200.0, round_=4, max_rounds=10)
+        assert play(game)["decision"] == "RejectOffer"
+
+    def test_the_known_zone_floor_still_takes_a_fair_split(self, monkeypatch):
+        self._arm(monkeypatch, known_zone_floor=0.45)
+        hist = [{"offer": {"price": 160.0, "from_player": "player_2", "round": r}}
+                for r in range(1, 8)]
+        game = negotiation_game(
+            action_type="decision", slot="player_1", my_value=100.0,
+            opponent_value=200.0, round_=4, max_rounds=10, history=hist,
+            last_offer={"price": 160.0, "from_player": "player_2", "round": 3})
+        assert play(game)["decision"] == "AcceptOffer"

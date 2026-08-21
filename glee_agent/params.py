@@ -252,6 +252,22 @@ class NegotiationParams:
     # largest, which is not the same offer at all.
     rung_last_word_shade: float = 0.01
 
+    # --- not blinking -----------------------------------------------------
+    # Complete-information deals split 0.6009 of the surplus our way when THEY
+    # signed our price and 0.3132 when we signed theirs, and we signed theirs in
+    # half of them. Worst of all is capitulating to a stonewaller: 164 games at
+    # 0.2083, reached after a median 15 rounds of holding before folding anyway.
+    #
+    # `opponent_has_stopped_moving` fires regardless of parity, so it can fold us
+    # out of the one seat that cannot be taken from us -- and 216 of 216
+    # last-word offers we have ever made were accepted. Off by default; the arm
+    # flips it.
+    stonewall_respects_ultimatum: bool = False
+    # With both valuations visible the surplus is a known quantity, so an offer
+    # can be scored against it directly instead of against a schedule. Refuse
+    # anything under this fraction of it while road remains. 0.0 disables.
+    known_zone_floor: float = 0.0
+
     # Identical prices in a row before we read the opponent as done negotiating
     # and take what is on the table. Replayed over every negotiation game we
     # have: at 6 it rescues the one open-ended game we ground to a 0-0 at the

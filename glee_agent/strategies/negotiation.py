@@ -343,8 +343,34 @@ def _make_decision(game: dict) -> dict:
     # turned it down forty-nine times while they never moved a cent, and the
     # game ended 0-0 at the round cap. Once they have visibly stopped
     # negotiating, what is on the table is the whole of what is on offer.
-    if gain > 0 and opponent_has_stopped_moving(state, slot):
+    # Both valuations visible: score the offer against the surplus itself rather
+    # than against a schedule, and refuse a thin slice outright. Bounded games
+    # only -- the endgame branch above then guarantees we still take any scrap
+    # once the road really has run out, which is the backstop an open-ended game
+    # does not have. Complete-information deals we signed took 0.3132 of the
+    # surplus against 0.6009 when they signed ours.
+    opponent_value = number(state, f"{OPPOSITE[slot]}_value", None)
+    bounded = bool(state.get("horizon_known", False)) and number(state, "max_rounds", None)
+    if P.known_zone_floor > 0.0 and opponent_value is not None and bounded and not final:
+        span = abs(opponent_value - my_value)
+        if span > 0 and gain < span * P.known_zone_floor:
+            counter = _bounded_price(game, state, slot, role,
+                                     _target_price(state, slot, role))
+            action = {"decision": "RejectOffer", "product_price": counter}
+            if SEND_MESSAGES and messages_allowed(game):
+                action["message"] = _counter_message(
+                    role, progress(state, P.unbounded_soft_horizon))
+            return action
+
+    holds_ultimatum = (
+        P.stonewall_respects_ultimatum
+        and bool(state.get("horizon_known", False))
+        and number(state, "max_rounds", None) is not None
+        and last_proposal_ours
+    )
+    if gain > 0 and opponent_has_stopped_moving(state, slot) and not holds_ultimatum:
         return {"decision": "AcceptOffer"}
+
 
     # If our counter lands on the last round, what it fetches there IS our
     # continuation value, so it prices the accept bar too -- comparing against a

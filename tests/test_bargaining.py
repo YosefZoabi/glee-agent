@@ -968,3 +968,112 @@ class TestTheOpenGameBarHasACeiling:
     def test_it_applies_to_both_seats(self, hold_cap_on):
         for slot in ("player_1", "player_2"):
             assert self._decide(their_offer=0.47, slot=slot) == "accept", slot
+
+
+class TestTheOpenHorizonIsNotReallyOpen:
+    """The server stops open games at round 99 and pays both sides $0.
+
+    It is real -- results carry `round_cap_reached: true` -- and undocumented.
+    The agent is never told: `horizon_known` stays false, so `rounds_left` is
+    None, `is_final_round` never fires, and the accept bar sits at
+    `min_accept_share` right through the last round. Replaying the pre-fix build
+    at round 99 it refused 0.34, 0.25 and 0.10 and banked nothing, which is
+    strictly dominated. 25 of 3,564 open games in the record ended exactly there.
+
+    This ships ON and has no flag: taking something over nothing at a genuine
+    final round cannot be worse.
+    """
+
+    def _decide(self, *, their_offer, round_, d=1.0, max_rounds=None, slot="player_1"):
+        money = 1000
+        mine = money * their_offer
+        them = "player_2" if slot == "player_1" else "player_1"
+        game = bargaining_game(
+            action_type="decision", slot=slot, money=money, round_=round_,
+            max_rounds=max_rounds, delta_1=d, delta_2=d, complete_information=True,
+            last_offer={f"{slot}_gain": mine, f"{them}_gain": money - mine,
+                        "proposer": them, "round": round_},
+        )
+        return play(game)["decision"]
+
+    def test_at_the_cap_we_take_what_is_on_the_table(self):
+        assert self._decide(their_offer=0.10, round_=99) == "accept"
+
+    def test_even_a_token_beats_the_zero_a_cap_pays(self):
+        assert self._decide(their_offer=0.02, round_=99) == "accept"
+
+    def test_the_bar_collapses_as_the_cap_comes_into_view(self):
+        # Mirrors the bounded endgame: within `endgame_rounds` of the end the
+        # bar drops to `endgame_floor`, not all the way to zero.
+        assert self._decide(their_offer=0.10, round_=97) == "accept"
+        assert self._decide(their_offer=0.02, round_=97) == "reject"
+
+    def test_mid_game_is_untouched(self):
+        # Far from the cap the agent should still be holding out normally.
+        assert self._decide(their_offer=0.10, round_=40) == "reject"
+
+    def test_a_bounded_game_keeps_its_own_endgame(self):
+        # 12-round games have a horizon the agent can see; nothing here applies.
+        assert self._decide(their_offer=0.10, round_=6, max_rounds=12) == "reject"
+
+
+class TestHoldingOutStopsPayingAtTheTop:
+    """`costless_hold_cap`: the arm. Ships off.
+
+    At delta 1.0 in an open game, holding out is measurably right for a long
+    way -- refusing 0.30-0.40 returns +0.150 of pot, 0.40-0.50 +0.029,
+    0.50-0.60 +0.056 -- and then turns over hard: refusing 0.60 or better
+    returns -0.3057 over 263 refusals, sigma -9.9, at a median round of 38-57.
+
+    So the cap has to sit ABOVE the range that pays. Getting the level wrong
+    converts a measured gain into a measured loss, which is why this is an arm
+    and not a default.
+    """
+
+    def _decide(self, *, their_offer, d_me=1.0, d_opp=0.8, round_=3,
+                max_rounds=None, slot="player_1"):
+        money = 1000
+        mine = money * their_offer
+        them = "player_2" if slot == "player_1" else "player_1"
+        d1, d2 = (d_me, d_opp) if slot == "player_1" else (d_opp, d_me)
+        game = bargaining_game(
+            action_type="decision", slot=slot, money=money, round_=round_,
+            max_rounds=max_rounds, delta_1=d1, delta_2=d2, complete_information=True,
+            last_offer={f"{slot}_gain": mine, f"{them}_gain": money - mine,
+                        "proposer": them, "round": round_},
+        )
+        return play(game)["decision"]
+
+    def test_the_shipped_default_still_holds_out(self):
+        # Guards the SHIPPED default. The equilibrium continuation puts the bar
+        # at 0.7275 here, which is what refuses the offers that measured -0.31.
+        assert self._decide(their_offer=0.65) == "reject"
+
+    def test_the_arm_signs_an_offer_over_the_cap(self, costless_cap_on):
+        assert self._decide(their_offer=0.65) == "accept"
+
+    def test_the_arm_leaves_the_range_that_pays_alone(self, costless_cap_on):
+        # Below the cap holding out is worth +0.03 to +0.15 of pot. The arm must
+        # not touch that half, or it trades a measured gain for nothing.
+        assert self._decide(their_offer=0.45) == "reject"
+        assert self._decide(their_offer=0.55) == "reject"
+
+    def test_the_arm_does_not_reach_discounted_games(self, costless_cap_on):
+        """delta 0.95 belongs to `discounted_hold_cap`, not to this one.
+
+        Asserted on the cap itself rather than on a decision: the decision there
+        also depends on whether `discounted_hold_cap_on` is set, so testing it
+        through `play` would pass or fail for reasons that have nothing to do
+        with this arm.
+        """
+        from glee_agent.strategies.bargaining import costless_hold_cap
+        state = bargaining_game(
+            action_type="decision", slot="player_1", money=1000, round_=3,
+            max_rounds=None, delta_1=0.95, delta_2=0.8, complete_information=True,
+        )["game_state"]
+        assert costless_hold_cap(state, "player_1") == 1.0
+
+    def test_the_arm_does_not_reach_bounded_games(self, costless_cap_on):
+        # A known horizon has an endgame seat worth playing for -- the
+        # measurement was open games only.
+        assert self._decide(their_offer=0.65, round_=3, max_rounds=12) == "reject"

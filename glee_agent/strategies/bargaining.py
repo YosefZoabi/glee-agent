@@ -279,6 +279,29 @@ def discounted_hold_cap(state: dict, slot: str) -> float:
     return P.discounted_hold_cap
 
 
+def costless_hold_cap(state: dict, slot: str) -> float:
+    """The other half of that ceiling, for the open games where delay is free.
+
+    `costless_hold_value` raises the bar here on the grounds that a player who
+    pays nothing to wait can afford to. That is true, and measurably so: at
+    delta 1.0 refusing an offer of 0.30-0.40 returns +0.150 of the pot,
+    0.40-0.50 +0.029, 0.50-0.60 +0.056. It stops being true immediately above
+    that -- refusing 0.60 or better returns -0.3057 over 263 refusals, sigma
+    -9.9 -- and the median round of those refusals is 38-57, which is the drag
+    toward the round cap showing up in the numbers.
+
+    So this caps the top of that range without touching the part that pays.
+    A ceiling, never a floor, and only where delay is genuinely free: everywhere
+    else `discounted_hold_cap` owns the question and this returns no cap.
+    """
+    if not P.costless_hold_cap_on:
+        return 1.0
+    delta_me, _ = _deltas(state, slot)
+    if delta_me < P.costless_delay_delta or rounds_left(state, 0) is not None:
+        return 1.0
+    return P.costless_hold_cap
+
+
 def opponent_is_sweeping(game: dict, slot: str) -> bool:
     """Are they running the endgame sweep on us?
 
@@ -522,6 +545,19 @@ def _make_decision(game: dict) -> dict:
         # own: it only bites as the soft horizon runs down, while the offers this
         # refuses arrive early. See `discounted_hold_cap`.
         threshold = min(threshold, money * discounted_hold_cap(state, slot))
+        threshold = min(threshold, money * costless_hold_cap(state, slot))
+        # The horizon is not really open: the server stops these games at
+        # `open_horizon_cap` and pays both sides $0. Nothing above knows that,
+        # because `rounds_left` is None and `is_final_round` never fires, so
+        # without this the bar stays at `min_accept_share` right through the
+        # last round and we book a zero rather than take what is on the table.
+        # Mirrors the bounded endgame exactly -- collapse to the floor as the
+        # road runs out, then to nothing on the final round itself.
+        to_cap = int(P.open_horizon_cap) - int(number(state, "round", 1) or 1)
+        if to_cap <= P.endgame_rounds:
+            threshold = min(threshold, money * P.endgame_floor)
+        if to_cap <= 0:
+            threshold = 0.0
     elif left <= P.endgame_rounds and not _final_round_is_ours(state, slot):
         # Out of road: a live offer beats the $0 that running out of rounds pays.
         # Only when the road really has run out, though. If the last proposal is

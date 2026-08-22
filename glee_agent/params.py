@@ -120,6 +120,38 @@ class BargainingParams:
     # this lowers it on 389 within-game paired observations, where accepting is
     # unilateral and terminal so the counterfactual needs no model of them.
     discounted_hold_cap_on: bool = False
+    # ...and the same ceiling for the games where delay is FREE, which the one
+    # above deliberately skips. At delta 1.0 holding out genuinely pays for a
+    # long way -- refusing 0.30-0.40 returns +0.150 of pot, 0.40-0.50 +0.029,
+    # 0.50-0.60 +0.056 -- so the cap has to sit above all of that, not at 0.425.
+    # It turns over hard right after:
+    #
+    #   refusing >= 0.55   n=364   -0.2122 of pot   sigma  -8.9
+    #   refusing >= 0.60   n=263   -0.3057 of pot   sigma  -9.9
+    #   refusing >= 0.65   n=245   -0.3281 of pot   sigma -10.1
+    #
+    # The median round of those refusals is 38-57, so these are exactly the
+    # games we drag toward the round cap. They are also where the cap actually
+    # bites: at delta 1.0 only 0.44% of open games reach round 99 -- the LOWEST
+    # rate of any delta -- but the average offer we had refused in them is 0.485
+    # of the pot, against 0.069-0.090 at every other delta. Rare and expensive,
+    # because a costless-delay player is the only one who can afford to sit on a
+    # high bar forever, and `costless_hold_share` plus the equilibrium
+    # continuation puts that bar at 0.7275 in the opening rounds.
+    costless_hold_cap: float = 0.60
+    # Ships off. This is the arm, not the default -- holding out is measurably
+    # right below 0.55 and only wrong above it, so getting the level wrong turns
+    # a gain into a loss. Tested on the weakest agent first.
+    costless_hold_cap_on: bool = False
+    # The server stops an open game dead at this round and pays BOTH sides $0.
+    # It is real -- the result carries `round_cap_reached: true` -- and it is not
+    # in the documentation, which says these games have no limit. The agent is
+    # never told: `horizon_known` stays false, so `rounds_left` returns None all
+    # the way to the end and `is_final_round` never fires. Replaying the live
+    # build at round 99 it still refuses 0.34, 0.25, 0.10 and banks nothing,
+    # which is strictly dominated -- at a true final round any positive offer
+    # beats zero. 25 of 3,564 open games in the record ended exactly there.
+    open_horizon_cap: int = 99
     # Raising this to 0.75 where their delta was VISIBLE was tried live against
     # an arm holding 0.50, and lost: 0.5527 vs 0.6056 share in the treatment
     # cell, -1.4 sigma, with all three control cells matched inside 0.005. The

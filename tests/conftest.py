@@ -75,3 +75,17 @@ def rations_on_mix(monkeypatch):
     monkeypatch.setattr(persuasion, "P",
                         dataclasses.replace(params.PERSUASION,
                                             hard_regime_rations_on_mix=True))
+
+
+@pytest.fixture
+def hold_cap_on(monkeypatch):
+    """Cap the open-game accept bar where waiting costs us.
+
+    Ships off, so the bar every other test exercises stays the one that is live.
+    """
+    import dataclasses
+    from glee_agent import params
+    from glee_agent.strategies import bargaining
+    monkeypatch.setattr(bargaining, "P",
+                        dataclasses.replace(params.BARGAINING,
+                                            discounted_hold_cap_on=True))

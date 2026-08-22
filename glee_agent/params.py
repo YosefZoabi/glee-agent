@@ -93,6 +93,33 @@ class BargainingParams:
     # break-even sits at 50%, so that is where a player who pays nothing to wait
     # should stand. Only ever a floor: `max` against the evidence bar.
     costless_hold_share: float = 0.50
+    # The mirror image, for the open games where waiting is NOT free. That floor
+    # raises the bar for a player who pays nothing to wait; this caps it for the
+    # one who does. Same measurement that produced it, run per delta over the
+    # open half of the record: refusing an offer of this size or better returned
+    # -0.0464 of the pot on average across 389 refusals below
+    # `costless_delay_delta` (sigma -9.0), and the sign holds in every 0.025
+    # band from 0.375 up and in both seats:
+    #
+    #   delta 0.95   0.40-0.45  -0.021    0.45-0.50  -0.036    0.50-0.55  -0.037
+    #   delta 0.90   0.40-0.45  -0.081
+    #   delta 1.00   every band POSITIVE, +0.004 to +0.141  <- capped out, see below
+    #
+    # No-deal rates in those bands run 0.0-1.8%, so this is not the usual
+    # survivorship trap: the games where holding out lost are in the sample.
+    # `realistic_counter_share` was fitted at 0.45 on 55 games pooled across all
+    # regimes, and in the open discounted half it is simply too high -- the
+    # equilibrium continuation can push the live bar past 0.50 there, which is
+    # how we come to refuse offers worth more than the deal we eventually sign.
+    # Only ever a ceiling, and only where delay costs us something: at
+    # delta >= `costless_delay_delta` holding out genuinely pays and the cap
+    # does not apply.
+    discounted_hold_cap: float = 0.425
+    # Ships off: this needs its own window, and three accept-bar changes have
+    # already failed to replicate. Those all RAISED the bar on a 55-game fit;
+    # this lowers it on 389 within-game paired observations, where accepting is
+    # unilateral and terminal so the counterfactual needs no model of them.
+    discounted_hold_cap_on: bool = False
     # Raising this to 0.75 where their delta was VISIBLE was tried live against
     # an arm holding 0.50, and lost: 0.5527 vs 0.6056 share in the treatment
     # cell, -1.4 sigma, with all three control cells matched inside 0.005. The

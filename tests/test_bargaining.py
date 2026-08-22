@@ -904,3 +904,67 @@ class TestClosingInsteadOfHaggling:
             delta_1=0.8, delta_2=0.8, complete_information=False,
         ))
         assert "even split" not in action["message"]
+
+
+class TestTheOpenGameBarHasACeiling:
+    """`discounted_hold_cap`: stop refusing offers better than the deal we sign.
+
+    Measured over 389 refusals in open games below `costless_delay_delta`:
+    refusing an offer at or above 0.425 of the pot returned -0.0464 of pot
+    (sigma -9.0), stable in every 0.025 band from 0.375 up and in both seats.
+
+    The live bar only climbs that high in one place, and probing it says exactly
+    where: an OPEN game under complete information where we are the patient side,
+    so `_continuation_value` hands us the big half. At delta 0.95 against 0.80 it
+    demands 0.578, and against 0.90 it demands 0.536 -- both well past the point
+    the record says holding out stops paying. Symmetric deltas never get there,
+    which is why these fixtures are deliberately lopsided.
+
+    These pin both halves: that it signs what it should, and that it leaves alone
+    the regimes where holding out genuinely pays.
+    """
+
+    def _decide(self, *, their_offer, d_me=0.95, d_opp=0.80, max_rounds=None,
+                round_=3, complete_information=True, slot="player_1"):
+        money = 1000
+        mine = money * their_offer
+        them = "player_2" if slot == "player_1" else "player_1"
+        d1, d2 = (d_me, d_opp) if slot == "player_1" else (d_opp, d_me)
+        game = bargaining_game(
+            action_type="decision", slot=slot, money=money, round_=round_,
+            max_rounds=max_rounds, delta_1=d1, delta_2=d2,
+            complete_information=complete_information,
+            last_offer={f"{slot}_gain": mine, f"{them}_gain": money - mine,
+                        "proposer": them, "round": round_},
+        )
+        return play(game)["decision"]
+
+    def test_the_shipped_default_still_refuses_it(self):
+        # Guards the SHIPPED bar: flipping the flag is expected to change this
+        # one and nothing in the regimes below it.
+        assert self._decide(their_offer=0.47) == "reject"
+
+    def test_an_offer_over_the_cap_is_signed(self, hold_cap_on):
+        assert self._decide(their_offer=0.47) == "accept"
+
+    def test_and_so_is_one_the_old_bar_refused_outright(self, hold_cap_on):
+        assert self._decide(their_offer=0.52) == "accept"
+
+    def test_an_offer_under_the_cap_is_still_refused(self, hold_cap_on):
+        # A ceiling only ever signs what we were about to refuse. It must not
+        # turn into a floor that starts signing lowballs.
+        assert self._decide(their_offer=0.20) == "reject"
+
+    def test_costless_delay_is_left_alone(self, hold_cap_on):
+        # At delta 1.0 every measured band said holding out PAYS (+0.004 to
+        # +0.141), which is why `costless_hold_share` raises the bar there.
+        assert self._decide(their_offer=0.47, d_me=1.0) == "reject"
+
+    def test_a_bounded_game_is_left_alone(self, hold_cap_on):
+        # Bounded games have an endgame seat to play for; the measurement was
+        # open games only.
+        assert self._decide(their_offer=0.47, max_rounds=12) == "reject"
+
+    def test_it_applies_to_both_seats(self, hold_cap_on):
+        for slot in ("player_1", "player_2"):
+            assert self._decide(their_offer=0.47, slot=slot) == "accept", slot

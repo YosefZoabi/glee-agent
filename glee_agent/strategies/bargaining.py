@@ -254,6 +254,31 @@ def costless_hold_value(state: dict, slot: str) -> float:
     return P.costless_hold_share
 
 
+def discounted_hold_cap(state: dict, slot: str) -> float:
+    """The most an open game is worth holding out for when waiting costs us.
+
+    The mirror of `costless_hold_value`, and the same measurement run on the
+    other side of `costless_delay_delta`. That one found a player who pays
+    nothing to wait defending a bar that was too low; this one finds the player
+    who does pay defending one that is too high. Over 389 refusals in open games
+    below the costless delta, refusing an offer at or above the cap returned
+    -0.0464 of the pot (sigma -9.0), stable across every band from 0.375 up and
+    in both seats.
+
+    A ceiling, never a floor -- the caller takes `min`, so this can only make us
+    sign something we were about to refuse, never refuse something we were about
+    to sign. Returns 1.0 (no cap) wherever the measurement does not apply: in
+    bounded games, which have an endgame seat to play for, and at deltas where
+    waiting is free and holding out measurably pays.
+    """
+    if not P.discounted_hold_cap_on:
+        return 1.0
+    delta_me, _ = _deltas(state, slot)
+    if delta_me >= P.costless_delay_delta or rounds_left(state, 0) is not None:
+        return 1.0
+    return P.discounted_hold_cap
+
+
 def opponent_is_sweeping(game: dict, slot: str) -> bool:
     """Are they running the endgame sweep on us?
 
@@ -493,6 +518,10 @@ def _make_decision(game: dict) -> dict:
             state, P.unbounded_soft_horizon
         )
         threshold = min(threshold, walked)
+        # ...and where waiting actually costs us, the walk is not enough on its
+        # own: it only bites as the soft horizon runs down, while the offers this
+        # refuses arrive early. See `discounted_hold_cap`.
+        threshold = min(threshold, money * discounted_hold_cap(state, slot))
     elif left <= P.endgame_rounds and not _final_round_is_ours(state, slot):
         # Out of road: a live offer beats the $0 that running out of rounds pays.
         # Only when the road really has run out, though. If the last proposal is

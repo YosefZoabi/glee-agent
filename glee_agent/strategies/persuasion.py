@@ -305,8 +305,33 @@ def _seller_recommends(game: dict) -> bool:
     # the last rounds it costs almost nothing, so the margin decays to zero and
     # we get the endgame aggression without ever hard-coding a ramp.
     remaining = max(0, total_rounds - round_number)
-    margin = P.credibility_margin * (remaining / max(1, total_rounds - 1))
-    if posterior_if_caught < tau + margin:
+    if p >= tau:
+        # The knife edge. `regime` sends p strictly above tau to "easy", so the
+        # only way here with p >= tau is p == tau: their prior sits exactly on
+        # their bar, and the ONLY thing that can push their posterior under it
+        # is the mix of our own recommendations. So ration against that mix
+        # directly -- keep the share of our recommendations that were genuinely
+        # high at or above the bar plus a sliver -- rather than vetoing on
+        # `posterior_if_caught`, which prices the risk of being caught out on a
+        # dud. That proxy is right for a hard market, where credibility is the
+        # whole game; here it throttles us to a realised 0.35-0.47 across 1,849
+        # measured low rounds when the bar itself only asks for ~0.96, and each
+        # round we decline is a sale handed back (a recommendation moves the buy
+        # rate from 3.6% to 89.8%).
+        #
+        # This IS the quota the regression asks for -- rationing against the
+        # lows actually seen, deterministically, so the realised rate cannot
+        # overshoot on a run of luck the way a per-round coin flip does. It
+        # front-loads honesty on its own: with nothing banked, delivered/(rec+1)
+        # starts below the bar and only clears it once real high-quality
+        # recommendations have accumulated. See TestSellerBudgetIsAQuota,
+        # regression game 2e48f9f7 (p = tau = 0.80, 20 of 20 pushed, 0 sold).
+        recommended, delivered, _bought = _recommendation_record(game)
+        realised = delivered / (recommended + 1)
+        return realised >= tau * (1.0 + P.knife_edge_margin)
+
+    required = tau + P.credibility_margin * (remaining / max(1, total_rounds - 1))
+    if posterior_if_caught < required:
         return False
 
     # Within the reputation budget, still ration by the static benchmark so a

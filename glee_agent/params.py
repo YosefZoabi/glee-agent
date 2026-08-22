@@ -304,6 +304,17 @@ class PersuasionParams:
     # to protect. That replaces the fixed early-honest/late-greedy ramp: the
     # aggression now falls out of what the remaining rounds are worth.
     credibility_margin: float = 0.12
+    # How far above the buyer's bar to hold the posterior at the knife edge,
+    # where p == tau exactly. `regime` refuses to call that market "easy"
+    # because recommending everything leaves their posterior sitting ON the bar
+    # and an indifferent buyer walks -- one observed game pushed all twenty
+    # rounds and sold none. That reasoning is right and the correction it asks
+    # for is an epsilon, but the credibility margin was answering it with a
+    # half: measured over 1,849 low-quality rounds in the three p == tau cells
+    # we recommended on 35-47% of them, where holding the posterior 2% clear of
+    # the bar permits 90-97%. Every round we declined there is a sale handed
+    # back, because a recommendation moves the buy rate from 3.6% to 89.8%.
+    knife_edge_margin: float = 0.02
     # A buyer who has refused this many recommendations we KNOW cleared their
     # rational bar is not reading our signal. Reputation with them buys nothing,
     # so there is nothing left to spend it on.

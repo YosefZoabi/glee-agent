@@ -89,3 +89,18 @@ def hold_cap_on(monkeypatch):
     monkeypatch.setattr(bargaining, "P",
                         dataclasses.replace(params.BARGAINING,
                                             discounted_hold_cap_on=True))
+
+
+@pytest.fixture
+def costless_cap_on(monkeypatch):
+    """Cap the open-game accept bar where delay costs us nothing.
+
+    Ships off: holding out at delta 1.0 is measurably right below 0.55 and only
+    wrong above it, so this is an arm rather than a default.
+    """
+    import dataclasses
+    from glee_agent import params
+    from glee_agent.strategies import bargaining
+    monkeypatch.setattr(bargaining, "P",
+                        dataclasses.replace(params.BARGAINING,
+                                            costless_hold_cap_on=True))

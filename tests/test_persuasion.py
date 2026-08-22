@@ -256,9 +256,58 @@ class TestSellerBudgetIsAQuota:
         posterior = 0.8 / (0.8 + mean * 0.2)
         assert posterior > 1_000_000 / 1_250_000
 
-    def test_wholesale_lying_becomes_rare(self):
-        rates = [self._play_game(s) for s in range(120)]
-        assert sum(1 for r in rates if r > 0.999) / len(rates) < 0.15
+    def test_the_buyer_is_never_left_under_the_bar_mid_game(self):
+        """The real invariant, replacing a proxy that has stopped tracking it.
+
+        This used to assert that few games recommend EVERY low round. That was a
+        good stand-in while the rate was a per-round coin flip, because
+        overshooting the intended rate was the only way to land the buyer on
+        their bar. Rationing against the realised mix instead, the proxy fires
+        on games that are perfectly safe -- one with two low rounds can push
+        both and still show 18/20 high.
+
+        What actually cost us game 2e48f9f7 was the buyer facing a credibility
+        at or under their bar on a round they could still refuse. Assert that
+        directly. Drops caused by the final-round sweep are excluded on purpose:
+        the buyer has no decision left to make, which is why the sweep is free.
+        """
+        bar = 1_000_000 / 1_250_000
+        for seed in range(60):
+            worst = self._worst_live_credibility(seed)
+            assert worst > bar, (
+                f"seed {seed}: buyer faced credibility {worst:.4f} against a bar "
+                f"of {bar:.4f} with rounds still to play"
+            )
+
+    def _worst_live_credibility(self, seed, *, p=0.8, rounds=20):
+        import random
+        from glee_agent.strategies.persuasion import _recommendation_record
+
+        rng = random.Random(seed)
+        history, worst = [], 1.0
+        for round_ in range(1, rounds + 1):
+            quality = "low" if rng.random() > p else "high"
+            game = persuasion_game(
+                action_type="seller_recommendation", slot="player_1", quality=quality,
+                p=p, v=1_250_000, u=0.0, price=1_000_000,
+                round_=round_, total_rounds=rounds, history=history,
+            )
+            game["game_id"] = f"quota-{seed}"
+            recommends = _seller_recommends(game)
+            history.append(persuasion_round(
+                round_=round_, message="yes" if recommends else "no",
+                bought=True, quality=quality,
+            ))
+            if round_ < rounds:
+                nxt = persuasion_game(
+                    action_type="seller_recommendation", slot="player_1", quality="low",
+                    p=p, v=1_250_000, u=0.0, price=1_000_000,
+                    round_=round_ + 1, total_rounds=rounds, history=history,
+                )
+                rec, delivered, _ = _recommendation_record(nxt)
+                if rec:
+                    worst = min(worst, delivered / rec)
+        return worst
 
     def test_a_high_quality_product_is_never_talked_down(self):
         game = persuasion_game(
@@ -571,3 +620,72 @@ class TestSellerRationingIsMeasuredButNotActedOn:
             seller_message="Worth it at this price.", history=history,
         )
         assert play(game)["decision"] == "no"
+
+
+# --- the knife edge, p == tau ------------------------------------------------
+
+
+def test_knife_edge_rations_against_the_realised_mix():
+    """At p == tau we ration on what we have actually recommended, not on a veto.
+
+    The invariant that matters is the buyer's: the share of our recommendations
+    that were genuinely high must stay above their bar, or the recommendation is
+    worthless to them. Within that, we should be spending the allowance rather
+    than sitting on it.
+    """
+    import random
+    from glee_agent.strategies.persuasion import _seller_recommends
+
+    def one_game(seed, p, v, price, rounds=20):
+        rng = random.Random(seed)
+        history, lows, lies, recs, highs = [], 0, 0, 0, 0
+        for round_ in range(1, rounds + 1):
+            quality = "low" if rng.random() > p else "high"
+            game = persuasion_game(
+                action_type="seller_recommendation", slot="player_1", quality=quality,
+                p=p, v=v, u=0.0, price=price, round_=round_, total_rounds=rounds,
+                history=history,
+            )
+            game["game_id"] = f"knife-{seed}"
+            rec = _seller_recommends(game)
+            if quality == "low":
+                lows += 1
+                lies += rec
+            if rec:
+                recs += 1
+                highs += quality == "high"
+            history.append(persuasion_round(
+                round_=round_, message="yes" if rec else "no",
+                bought=True, quality=quality,
+            ))
+        return (lies / lows if lows else 0.0, highs / recs if recs else 1.0)
+
+    for p, v, price in ((0.8, 1_250_000, 1_000_000), (0.5, 100.0, 50.0)):
+        runs = [one_game(s, p, v, price) for s in range(60)]
+        low_push = sum(r[0] for r in runs) / len(runs)
+        credibility = sum(r[1] for r in runs) / len(runs)
+        # The buyer's invariant: our recommendations stay worth acting on.
+        assert credibility >= p, (
+            f"p={p}: recommendations averaged {credibility:.3f} high, under the bar {p}"
+        )
+        # ...and we are not hoarding the allowance. The credibility-margin veto
+        # produced 0.35-0.47 here on live data; rationing on the realised mix
+        # should clearly beat that.
+        assert low_push > 0.47, f"p={p}: pushed only {low_push:.3f} of low rounds"
+
+
+def test_easy_market_still_pushes_everything():
+    """p strictly above tau is untouched -- it never reaches the knife branch."""
+    from glee_agent.strategies.persuasion import play
+
+    game = persuasion_game(
+        action_type="seller_recommendation",
+        slot="player_1",
+        p=0.8,
+        v=100.0,
+        price=25.0,          # tau = 0.25, well under p
+        quality="low",
+        round_=1,
+        total_rounds=20,
+    )
+    assert play(game)["decision"] == "yes"

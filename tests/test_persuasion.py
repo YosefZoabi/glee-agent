@@ -689,3 +689,91 @@ def test_easy_market_still_pushes_everything():
         total_rounds=20,
     )
     assert play(game)["decision"] == "yes"
+
+
+class TestTheInteriorCanRationOnTheMixToo:
+    """`hard_regime_rations_on_mix`: the knife rule extended to p < tau.
+
+    The live credibility gate is anchored at the prior, so where p sits under
+    the buyer's bar it stays shut for longer than the game lasts. Replaying it
+    over 6,390 logged interior low rounds it opened on 6.3% of them, and on only
+    9.7% with the margin taken to zero -- so the margin is not what binds, the
+    anchor is. The mix rule has no anchor and a fixed point at tau.
+
+    These pin the two things that make it safe to try: it does more than the
+    gate, and it still never sells the buyer a posterior under their bar.
+    """
+
+    P_INT, V, PRICE = 0.5, 1_250_000, 1_000_000     # tau = 0.80, so p < tau
+
+    def _play(self, seed, *, rounds=20):
+        """Play one interior game, returning (lie rate, worst live posterior)."""
+        import random
+        from glee_agent.strategies.persuasion import _recommendation_record
+
+        rng = random.Random(seed)
+        history, lows, lies, worst = [], 0, 0, 1.0
+        for round_ in range(1, rounds + 1):
+            quality = "low" if rng.random() > self.P_INT else "high"
+            game = persuasion_game(
+                action_type="seller_recommendation", slot="player_1", quality=quality,
+                p=self.P_INT, v=self.V, u=0.0, price=self.PRICE,
+                round_=round_, total_rounds=rounds, history=history,
+            )
+            game["game_id"] = f"interior-{seed}"
+            recommends = _seller_recommends(game)
+            if quality == "low":
+                lows += 1
+                lies += recommends
+            history.append(persuasion_round(
+                round_=round_, message="yes" if recommends else "no",
+                bought=True, quality=quality,
+            ))
+            if round_ < rounds:
+                nxt = persuasion_game(
+                    action_type="seller_recommendation", slot="player_1", quality="low",
+                    p=self.P_INT, v=self.V, u=0.0, price=self.PRICE,
+                    round_=round_ + 1, total_rounds=rounds, history=history,
+                )
+                rec, delivered, _ = _recommendation_record(nxt)
+                if rec:
+                    worst = min(worst, delivered / rec)
+        return (lies / lows if lows else 0.0), worst
+
+    def test_the_shipped_default_leaves_the_interior_alone(self):
+        # Guards the SHIPPED default: flipping the flag is expected to change
+        # this number and nothing outside this class.
+        rates = [self._play(s)[0] for s in range(40)]
+        assert sum(rates) / len(rates) < 0.15
+
+    def test_rationing_on_the_mix_frees_the_interior(self, rations_on_mix):
+        rates = [self._play(s)[0] for s in range(40)]
+        assert sum(rates) / len(rates) > 0.20
+
+    def test_but_never_past_the_persuasion_optimum(self, rations_on_mix):
+        """q* is the most a buyer at their bar can be made to tolerate.
+
+        Overshooting it is the one way this rule could be worse than the gate it
+        replaces, so bound it directly rather than trusting the fixed point.
+        """
+        rates = [self._play(s)[0] for s in range(40)]
+        q_star = lie_budget(self.P_INT, self.PRICE, self.V, 0)
+        assert sum(rates) / len(rates) <= q_star
+
+    def test_the_buyer_is_still_never_left_under_the_bar(self, rations_on_mix):
+        bar = buyer_threshold(self.PRICE, self.V, 0)
+        for seed in range(40):
+            _, worst = self._play(seed)
+            assert worst > bar, (
+                f"seed {seed}: buyer faced posterior {worst:.4f} against a bar of "
+                f"{bar:.4f} with rounds still to play"
+            )
+
+    def test_a_high_quality_product_is_still_never_talked_down(self, rations_on_mix):
+        game = persuasion_game(
+            action_type="seller_recommendation", slot="player_1", quality="high",
+            p=self.P_INT, v=self.V, u=0.0, price=self.PRICE, round_=9, total_rounds=20,
+            history=[persuasion_round(round_=r, message="yes", bought=True, quality="low")
+                     for r in range(1, 9)],
+        )
+        assert _seller_recommends(game) is True

@@ -305,7 +305,7 @@ def _seller_recommends(game: dict) -> bool:
     # the last rounds it costs almost nothing, so the margin decays to zero and
     # we get the endgame aggression without ever hard-coding a ramp.
     remaining = max(0, total_rounds - round_number)
-    if p >= tau:
+    if p >= tau or P.hard_regime_rations_on_mix:
         # The knife edge. `regime` sends p strictly above tau to "easy", so the
         # only way here with p >= tau is p == tau: their prior sits exactly on
         # their bar, and the ONLY thing that can push their posterior under it
@@ -326,6 +326,14 @@ def _seller_recommends(game: dict) -> bool:
         # starts below the bar and only clears it once real high-quality
         # recommendations have accumulated. See TestSellerBudgetIsAQuota,
         # regression game 2e48f9f7 (p = tau = 0.80, 20 of 20 pushed, 0 sold).
+        #
+        # Under `hard_regime_rations_on_mix` the same rule takes the interior
+        # too, where p < tau. The argument carries because the rule is stated in
+        # the buyer's own terms: delivered/recommended IS the posterior a
+        # recommendation induces, so holding it at tau holds them at their bar
+        # whatever the prior was. What does NOT carry over is the credibility
+        # gate below, whose anchor at p keeps it shut for longer than the game
+        # lasts once p sits under the bar. See `hard_regime_rations_on_mix`.
         recommended, delivered, _bought = _recommendation_record(game)
         realised = delivered / (recommended + 1)
         return realised >= tau * (1.0 + P.knife_edge_margin)

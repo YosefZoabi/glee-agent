@@ -59,3 +59,19 @@ def messages_off(monkeypatch):
     purpose.
     """
     _set_messages(monkeypatch, False)
+
+
+@pytest.fixture
+def rations_on_mix(monkeypatch):
+    """Ration the whole hard persuasion market against the realised mix.
+
+    Ships off, like `rung_aware`, so the interior behaviour it changes has to be
+    asked for explicitly and every other test keeps exercising the credibility
+    gate that is actually live.
+    """
+    import dataclasses
+    from glee_agent import params
+    from glee_agent.strategies import persuasion
+    monkeypatch.setattr(persuasion, "P",
+                        dataclasses.replace(params.PERSUASION,
+                                            hard_regime_rations_on_mix=True))

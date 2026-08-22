@@ -315,6 +315,33 @@ class PersuasionParams:
     # the bar permits 90-97%. Every round we declined there is a sale handed
     # back, because a recommendation moves the buy rate from 3.6% to 89.8%.
     knife_edge_margin: float = 0.02
+    # Ration the WHOLE hard market against the realised recommendation mix, the
+    # way the knife edge already does, instead of against `posterior_if_caught`.
+    #
+    # The credibility gate is anchored at p: credibility starts at the prior and
+    # only climbs as the buyer BUYS high-quality recommendations. Where p < tau
+    # that anchor sits below the bar by construction, and lifting it over
+    # requires more bought high rounds than a 20-round game contains. Replaying
+    # the live gate over 6,390 interior low rounds, it opens on 6.3% of them --
+    # and at margin 0.00 on only 9.7%, so the margin is not what binds. Three of
+    # six interior configs are frozen at 0.0%: we never lie in them at all.
+    #
+    # The mix rule has no p anchor and a fixed point: it admits lies until
+    # delivered/recommended falls back to tau, which IS the Kamenica-Gentzkow
+    # constraint that the buyer's posterior sit at their bar. Replayed over the
+    # same rounds it permits 16.2%, and per config it lands strictly BELOW q*
+    # everywhere measured (7.3 vs 12.5, 4.0 vs 10.0, 36.6 vs 50.0, 10.1 vs 20.0,
+    # 16.7 vs 25.0, 39.3 vs 80.0) -- more conservative than the optimum, never
+    # over it.
+    #
+    # Default OFF: this needs its own arm with three controls. What it replaces
+    # was justified by interior buyers punishing detected lies (56.1% -> 17.0%
+    # compliance), and that finding does not survive -- quality is hidden on
+    # rounds the buyer passes, so those "lies" were invisible to them. Splitting
+    # by what they could actually see reverses it: lies they BOUGHT run 51.5% ->
+    # 94.3%, lies they PASSED 59.1% -> 0.5%. The second column is not punishment,
+    # it is the definition of a buyer who has stopped buying.
+    hard_regime_rations_on_mix: bool = False
     # A buyer who has refused this many recommendations we KNOW cleared their
     # rational bar is not reading our signal. Reputation with them buys nothing,
     # so there is nothing left to spend it on.

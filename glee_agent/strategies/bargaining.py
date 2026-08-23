@@ -226,7 +226,13 @@ def endgame_hold_value(state: dict, slot: str) -> float:
     if wait is None:
         return 0.0
     delta_me, _ = _deltas(state, slot)
-    return clamp(P.final_round_demand * delta_me ** wait, 0.0, P.final_round_demand)
+    # Priced at what the seat actually returns, not at what it would return if
+    # the responder were rational. They take the $0 in 8.1% of 1,415 recorded
+    # cases. The caller must NOT shave this again with `accept_slack`: that
+    # prices "they may never concede", and this seat cannot be taken from us --
+    # its only risk is the refusal already priced here. See `endgame_sign_rate`.
+    seat = P.final_round_demand * P.endgame_sign_rate * delta_me ** wait
+    return clamp(seat, 0.0, P.final_round_demand)
 
 
 def hold_out_value(state: dict, slot: str) -> float:
@@ -272,7 +278,7 @@ def costless_hold_value(state: dict, slot: str) -> float:
     delta_me, _ = _deltas(state, slot)
     if delta_me < P.costless_delay_delta or rounds_left(state, 0) is not None:
         return 0.0
-    return P.costless_hold_share
+    return P.costless_open_share if P.costless_open_holds_on else P.costless_hold_share
 
 
 def discounted_hold_cap(state: dict, slot: str) -> float:
@@ -622,6 +628,14 @@ def _make_decision(game: dict) -> dict:
     threshold = money * max(
         stonewall_threshold(state, slot),
         hold_out_value(state, slot) * P.accept_slack,
+        # The endgame seat again, unslacked. `hold_out_value` already contains
+        # it, but the caller shaves that whole max by `accept_slack` -- a
+        # discount for "they may never concede", which is the one risk this seat
+        # does not carry. Its real risk is the 8.1% who take the $0, and that is
+        # already inside `endgame_hold_value` via `endgame_sign_rate`. Charging
+        # both prices the same danger twice and sells the seat for 97% of what
+        # it returns.
+        endgame_hold_value(state, slot),
         costless_hold_value(state, slot),
     )
 
@@ -639,8 +653,15 @@ def _make_decision(game: dict) -> dict:
         # 92727cf1 for sixty-nine rounds to bank 274 of a 353,652 split. Time
         # pressure in an open-ended game can only ever be an argument for
         # signing sooner.
+        # A costless-delay player is walking against the wrong clock. The soft
+        # horizon is 12 and the game runs to `open_horizon_cap`, so the bar is
+        # spent long before anything forces a decision. See
+        # `costless_open_holds_on`.
+        soft = P.unbounded_soft_horizon
+        if P.costless_open_holds_on and _deltas(state, slot)[0] >= P.costless_delay_delta:
+            soft = max(1, int(P.open_horizon_cap) - int(P.endgame_rounds))
         walked = threshold + (money * floor_accept_share() - threshold) * progress(
-            state, P.unbounded_soft_horizon
+            state, soft
         )
         threshold = min(threshold, walked)
         # ...and where waiting actually costs us, the walk is not enough on its

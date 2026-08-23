@@ -112,6 +112,22 @@ class BargainingParams:
     endgame_demand_cap: float = 0.55
     # `min_opponent_share` clamps this anyway, so 0.97 is what 0.99 already meant.
     final_round_demand: float = 0.97
+    # How often the responder actually signs that final offer. The seat was
+    # described as a guarantee -- they choose between our number and $0, so they
+    # "have to" take it -- on the strength of four observations. Over the full
+    # record it is 1,301 signed of 1,415 (91.9%), and the other 114 took the $0
+    # instead. Accepting was strictly better for them in every one of those, so
+    # this is not a rational response we can price away by asking for less: at an
+    # ask of 0.9 they sign 90.1%, at 1.0 they sign 92.1%. Asking less buys
+    # nothing.
+    #
+    # It matters because the endgame seat is a FLOOR under the accept bar, and a
+    # floor worth 91.9% of its nominal value is not the same as one worth 100%.
+    # The bar currently shaves it by `accept_slack` (0.97) instead, which is both
+    # the wrong number and the wrong reason -- that discount prices "they may
+    # never concede", which is exactly the risk the endgame seat does not carry.
+    # The risk it does carry is this one.
+    endgame_sign_rate: float = 0.919
     # At or above this delta, delay costs us nothing. Combined with holding the
     # last proposal it licenses the endgame sweep: stall to the final round and
     # take `final_round_demand`, because rejecting it pays the responder $0.
@@ -127,6 +143,29 @@ class BargainingParams:
     # break-even sits at 50%, so that is where a player who pays nothing to wait
     # should stand. Only ever a floor: `max` against the evidence bar.
     costless_hold_share: float = 0.50
+    # ...and the walk-down underneath it undoes that floor almost immediately.
+    # An open game is walked toward `min_accept_share` over
+    # `unbounded_soft_horizon` = 12 rounds, but the game does not end at 12 -- it
+    # ends at 99. Observed live at delta 1.0, open, hidden: the bar is 0.50 at
+    # round 1, 0.4625 by round 4, and bottoms out at 0.35 by round 20, where it
+    # then sits for seventy-nine more rounds. We took a 50/50 at round 4 of a
+    # 99-round game in which waiting cost us exactly nothing.
+    #
+    # The walk exists because time pressure argues for signing sooner. At delta
+    # 1.0 there is no time pressure until the cap, so keying it to a 12-round
+    # horizon prices a deadline that is not there. With this on, a costless-delay
+    # player walks against the REAL cap instead, and holds `costless_open_share`
+    # until the endgame collapse takes over.
+    #
+    # Note what this does to the evidence against holding. Both earlier
+    # measurements -- "rejecting 50-55% gained nothing" over 56 games, and the
+    # 23,617-refusal break-even that put this cell at 0.30 -- score refusing
+    # against what we ACTUALLY banked afterwards. With the bar collapsing to 0.35
+    # by round 20, refusing was always going to look bad: the follow-through was
+    # the defect. Neither result rules out holding under a policy that actually
+    # holds.
+    costless_open_holds_on: bool = False
+    costless_open_share: float = 0.57
     # The mirror image, for the open games where waiting is NOT free. That floor
     # raises the bar for a player who pays nothing to wait; this caps it for the
     # one who does. Same measurement that produced it, run per delta over the

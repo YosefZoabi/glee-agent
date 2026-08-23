@@ -153,6 +153,40 @@ def tradable_rungs(state: dict, slot: str, role: str) -> list[float] | None:
 # where we held firm and they walked was invisible to it. The games the change
 # would go on to lose were exactly the ones missing from the evidence for it.
 
+def final_offer_is_theirs(state: dict, slot: str) -> bool:
+    """When we price this round, will the LAST price of the game be theirs?
+
+    Prices alternate, so the parity of the gap to the horizon decides it. False
+    whenever the horizon is unknown, since then there is no last price to hold.
+    """
+    if not state.get("horizon_known", False):
+        return False
+    max_rounds = number(state, "max_rounds", None)
+    current = number(state, "round", None)
+    if max_rounds is None or current is None:
+        return False
+    return (int(max_rounds) - int(current)) % 2 == 1
+
+
+def _non_revealing_floor(state: dict, slot: str, role: str) -> float | None:
+    """The price below which our ask names our own rung.
+
+    Valuations sit on a known pool, so a seller asking under the next rung up is
+    a seller who cannot be standing on it -- which leaves exactly one rung it can
+    be standing on. Above that line the ask is consistent with two rungs and says
+    nothing.
+    """
+    placed = pool_position(number(state, f"{slot}_value", None))
+    if placed is None:
+        return None
+    index, scale = placed
+    rungs = [rung * scale for rung in RUNG_SHAPE]
+    neighbours = rungs[index + 1:] if role == "seller" else rungs[:index]
+    if not neighbours:
+        return None
+    return min(neighbours) if role == "seller" else max(neighbours)
+
+
 def _rung_price(state: dict, slot: str, role: str, my_value: float,
                 last_word: bool) -> float | None:
     """Price aimed at one specific opponent valuation, or None to fall through.
@@ -209,7 +243,19 @@ def _rung_price(state: dict, slot: str, role: str, my_value: float,
     if left is not None:
         usable = max(1, left - P.endgame_rounds)
         reached = max(reached, len(live) - min(len(live), usable))
-    return price_for(live[min(reached, len(live) - 1)])
+    price = price_for(live[min(reached, len(live) - 1)])
+
+    # If the LAST price of the game is theirs, this one cannot close it: they
+    # answer with a take-it-or-leave-it instead, and we sign anything profitable
+    # because a no-deal pays $0. Measured over 715 such games they signed our
+    # penultimate ask exactly ZERO times, while it had already named our rung in
+    # 535 of them. An ask that cannot be accepted should at least not be
+    # informative, so hold it where two rungs could have made it.
+    if P.hide_rung_from_last_word and final_offer_is_theirs(state, slot):
+        floor_ = _non_revealing_floor(state, slot, role)
+        if floor_ is not None:
+            price = max(price, floor_) if role == "seller" else min(price, floor_)
+    return price
 
 
 def _target_price(state: dict, slot: str, role: str, last_word: bool = False) -> float:

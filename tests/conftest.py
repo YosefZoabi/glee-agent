@@ -116,3 +116,14 @@ def stonewall_waits(monkeypatch):
                         dataclasses.replace(params.NEGOTIATION,
                                             stonewall_needs_endgame=True))
 
+
+
+@pytest.fixture
+def hide_rung(monkeypatch):
+    """Stop an unacceptable ask from naming our own rung."""
+    import dataclasses
+    from glee_agent import params
+    from glee_agent.strategies import negotiation
+    monkeypatch.setattr(negotiation, "P",
+                        dataclasses.replace(params.NEGOTIATION,
+                                            hide_rung_from_last_word=True))

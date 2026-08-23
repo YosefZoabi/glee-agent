@@ -558,3 +558,85 @@ class TestAStonewallerIsNotEvidenceUntilTheClockIsReal:
         # Rounds genuinely scarce -- the branch should behave as it always did.
         assert play(self._game(round_=10, max_rounds=10))["decision"] == "AcceptOffer"
 
+
+
+class TestAnAskThatCannotCloseShouldNotTalk:
+    """Regression: seller at 800,000 asked 970,000 on round 9 of 10.
+
+    No seller standing on the 1,000,000 rung would ever ask 970,000, so that
+    price named us exactly. The buyer held the last word, answered 824,000, and
+    we banked 24,000 against their 176,000.
+
+    The ask bought nothing to pay for that: over 715 bounded games where the
+    final price was theirs, they signed our second-to-last ask ZERO times -- they
+    always answered with their own take-it-or-leave-it instead, which we then
+    sign because a no-deal pays $0. In 535 of those 715 the ask had already
+    placed us.
+    """
+
+    def _ask(self, *, round_, max_rounds, my_value=800000.0, slot="player_1"):
+        state = {
+            "round": round_, "max_rounds": max_rounds, "horizon_known": True,
+            "complete_information": False, "history": [], "last_offer": None,
+            "player_1_role": "seller", "player_2_role": "buyer",
+            "messages_allowed": False, "current_player": slot,
+        }
+        state[f"{slot}_value"] = my_value
+        return play({"game_state": state, "your_player": slot,
+                     "game_family": "negotiation",
+                     "valid_actions": {"type": "offer"}})["product_price"]
+
+    def test_the_shipped_default_names_the_rung(self):
+        # Guards the SHIPPED behaviour: 970,000 is under the 1,000,000 rung.
+        assert self._ask(round_=9, max_rounds=10) < 1_000_000
+
+    def test_the_arm_holds_at_the_rung_above(self, hide_rung):
+        assert self._ask(round_=9, max_rounds=10) >= 1_000_000
+
+    def test_it_only_applies_when_the_last_price_is_theirs(self, hide_rung):
+        # Round 8 of 10: the last price is ours, so revealing costs nothing --
+        # we set the final number and they take it or take zero.
+        from glee_agent.strategies.negotiation import final_offer_is_theirs
+        state = {"round": 8, "max_rounds": 10, "horizon_known": True}
+        assert final_offer_is_theirs(state, "player_1") is False
+        state["round"] = 9
+        assert final_offer_is_theirs(state, "player_1") is True
+
+    def test_the_buyer_side_reads_the_other_direction(self, hide_rung):
+        # A buyer on the 150 rung must not bid ABOVE the 120 rung beneath it.
+        assert self._ask(round_=9, max_rounds=10, my_value=150.0, slot="player_2") <= 120.0
+
+    def test_an_open_horizon_is_untouched(self, hide_rung):
+        # No horizon means no last price to hold, so nothing to hide from.
+        state = {
+            "round": 9, "max_rounds": None, "horizon_known": False,
+            "complete_information": False, "history": [], "last_offer": None,
+            "player_1_role": "seller", "player_2_role": "buyer",
+            "messages_allowed": False, "current_player": "player_1",
+            "player_1_value": 800000.0,
+        }
+        price = play({"game_state": state, "your_player": "player_1",
+                      "game_family": "negotiation",
+                      "valid_actions": {"type": "offer"}})["product_price"]
+        assert price < 1_000_000
+
+    def test_the_final_round_is_untouched(self, hide_rung):
+        """On the last round the price is ours and the arm must not move it.
+
+        Asserted against the unflagged price rather than a literal: the last
+        word takes the best-expected-value rung rather than walking the ladder,
+        so the number there is not the floor and hard-coding one would test the
+        schedule instead of this arm.
+        """
+        import dataclasses
+        from glee_agent import params
+        from glee_agent.strategies import negotiation
+        flagged = self._ask(round_=10, max_rounds=10)
+        negotiation.P = dataclasses.replace(params.NEGOTIATION,
+                                            hide_rung_from_last_word=False)
+        try:
+            plain = self._ask(round_=10, max_rounds=10)
+        finally:
+            negotiation.P = dataclasses.replace(params.NEGOTIATION,
+                                                hide_rung_from_last_word=True)
+        assert flagged == pytest.approx(plain)

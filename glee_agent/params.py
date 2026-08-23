@@ -363,6 +363,25 @@ class NegotiationParams:
     # stonewaller pays 0 either way, so the gain is real only if they move, and
     # we have never refused one to find out.
     stonewall_needs_endgame: bool = False
+    # Do not name our own rung in an ask that cannot be accepted.
+    #
+    # When the final price of the game is theirs, our second-to-last ask has no
+    # path to closing: they answer with a take-it-or-leave-it instead, and we
+    # sign anything profitable because a no-deal pays $0. Measured over 715
+    # bounded games where the last word was theirs, they signed that ask ZERO
+    # times -- 0.0% -- and in 535 of them (74.8%) it had already placed us
+    # exactly, because a seller asking under the next rung up cannot be standing
+    # on it.
+    #
+    # Observed live: seller at 800,000 asked 970,000 on round 9 of 10, which no
+    # 1,000,000 seller would ever do. The buyer answered 824,000 on the last
+    # round and we banked 24,000 against their 176,000.
+    #
+    # Holding the ask at the next rung up costs no sales -- there were none to
+    # lose at 0 of 715 -- and leaves the opponent unable to tell which of two
+    # rungs it is facing. Ships off, and separately from
+    # `stonewall_needs_endgame` so the two do not pool.
+    hide_rung_from_last_word: bool = False
     # A "never concede past the midpoint" rail was tried here and removed: it
     # cannot bind. The ladder parks at value + 0.85 * (nearest rung - value)
     # and the midpoint is value + 0.50 * (the same), so the ladder is already

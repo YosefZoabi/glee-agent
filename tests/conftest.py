@@ -143,3 +143,13 @@ def sweep_counter(monkeypatch):
     monkeypatch.setattr(bargaining, "P",
                         dataclasses.replace(params.BARGAINING,
                                             sweep_counter_on=True))
+
+
+@pytest.fixture
+def settle_early(monkeypatch):
+    """Charge a rejection what the record says it really costs."""
+    import dataclasses
+    from glee_agent import params
+    from glee_agent.strategies import bargaining
+    monkeypatch.setattr(bargaining, "P",
+                        dataclasses.replace(params.BARGAINING, settle_early_on=True))

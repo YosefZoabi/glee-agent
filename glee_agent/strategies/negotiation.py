@@ -268,6 +268,21 @@ def _target_price(state: dict, slot: str, role: str, last_word: bool = False) ->
     return floor + (opening - floor) * weight
 
 
+def near_the_end(state: dict) -> bool:
+    """Is refusing about to stop being free?
+
+    A bounded game ends at `max_rounds`. An open one is not really open -- the
+    server stops it at `open_horizon_cap` and pays both sides $0 -- but nothing
+    in the state says so, which is why this reads the round number directly
+    rather than trusting `rounds_left`, which returns None all the way to the end.
+    """
+    left = rounds_left(state, 0)
+    if left is not None:
+        return left <= P.endgame_rounds
+    round_number = int(number(state, "round", 1) or 1)
+    return (int(P.open_horizon_cap) - round_number) <= P.endgame_rounds
+
+
 def _no_zone_of_agreement(state: dict, slot: str) -> bool:
     """True only when both valuations are visible and no price can pay both."""
     seller_value = number(state, "player_1_value", None)
@@ -380,7 +395,13 @@ def _make_decision(game: dict) -> dict:
         and last_proposal_ours
     )
     if gain > 0 and opponent_has_stopped_moving(state, slot) and not holds_ultimatum:
-        return {"decision": "AcceptOffer"}
+        # Only cave to a stonewaller once refusing actually costs us something.
+        # The branch can only ever arm in an open game -- a bounded one is too
+        # short for `stonewall_offers` of their offers to land -- and an open
+        # game has no inflation and 87 rounds still to run, so "they have not
+        # moved yet" is not evidence they never will. See `stonewall_needs_endgame`.
+        if not P.stonewall_needs_endgame or near_the_end(state):
+            return {"decision": "AcceptOffer"}
 
 
     # If our counter lands on the last round, what it fetches there IS our

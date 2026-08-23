@@ -496,3 +496,65 @@ class TestNotBlinking:
             opponent_value=200.0, round_=4, max_rounds=10, history=hist,
             last_offer={"price": 160.0, "from_player": "player_2", "round": 3})
         assert play(game)["decision"] == "AcceptOffer"
+
+
+class TestAStonewallerIsNotEvidenceUntilTheClockIsReal:
+    """Regression: a buyer repeated 81.20 six times and we signed for 1.20.
+
+    Seller valuing the item at 80, open horizon, buyer offers 81.20 on every one
+    of their turns. On the sixth, `opponent_has_stopped_moving` arms and accepts
+    -- overriding our own bar, which stood at a profit of 15.30 against a target
+    of 97. Round 12 of a game that does not end until 99.
+
+    The branch can only ever arm in an open game: a bounded negotiation runs at
+    most 10 rounds, so the opponent never lands `stonewall_offers` offers. Over
+    the record it armed on a profitable price in 243 of 2234 open games and zero
+    bounded ones, taking 0.0718 of our valuation where the schedule asked 0.2064.
+    """
+
+    def _game(self, *, round_, their_price=81.2, my_value=80.0, max_rounds=None):
+        history = []
+        asks = [118.4, 117.16, 114.68, 112.2, 109.72, 107.24]
+        for k in range((round_ - 1) // 2):
+            r = k * 2 + 1
+            history.append({"round": r, "decision": "RejectOffer",
+                            "offer": {"price": asks[k % len(asks)],
+                                      "from_player": "player_1", "round": r}})
+            history.append({"round": r + 1, "decision": "RejectOffer",
+                            "offer": {"price": their_price,
+                                      "from_player": "player_2", "round": r + 1}})
+        state = {
+            "round": round_, "max_rounds": max_rounds,
+            "horizon_known": max_rounds is not None,
+            "complete_information": False, "history": history,
+            "last_offer": {"price": their_price, "from_player": "player_2", "round": round_},
+            "player_1_role": "seller", "player_2_role": "buyer",
+            "messages_allowed": False, "current_player": "player_1",
+            "player_1_value": my_value,
+        }
+        return {"game_state": state, "your_player": "player_1", "game_family": "negotiation"}
+
+    def test_the_shipped_default_caves_on_the_sixth_repeat(self):
+        # Guards the SHIPPED behaviour: flipping the flag changes this one.
+        assert play(self._game(round_=12))["decision"] == "AcceptOffer"
+
+    def test_it_held_out_up_to_that_point(self):
+        for round_ in (2, 4, 6, 8, 10):
+            assert play(self._game(round_=round_))["decision"] == "RejectOffer", round_
+
+    def test_the_arm_keeps_refusing_mid_game(self, stonewall_waits):
+        assert play(self._game(round_=12))["decision"] == "RejectOffer"
+
+    def test_the_arm_still_refuses_much_later(self, stonewall_waits):
+        # Round 40 of 99: refusing is still free, so there is still nothing to buy
+        # by caving.
+        assert play(self._game(round_=40))["decision"] == "RejectOffer"
+
+    def test_but_takes_it_when_the_cap_is_in_sight(self, stonewall_waits):
+        # At the real end of an open game, 1.20 beats the $0 a cap pays.
+        assert play(self._game(round_=98))["decision"] == "AcceptOffer"
+
+    def test_a_bounded_endgame_still_signs(self, stonewall_waits):
+        # Rounds genuinely scarce -- the branch should behave as it always did.
+        assert play(self._game(round_=10, max_rounds=10))["decision"] == "AcceptOffer"
+

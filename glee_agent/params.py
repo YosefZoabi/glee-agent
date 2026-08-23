@@ -341,6 +341,39 @@ class NegotiationParams:
     # Do not lower it to 3: that sells twelve won games for a third of what
     # they paid, because "moving slowly" and "not moving" are different things.
     stonewall_offers: int = 6
+    # ...but only where refusing costs something. Two facts make the branch as
+    # written a liability rather than a safeguard.
+    #
+    # It can ONLY fire in an open game. A bounded negotiation runs at most 10
+    # rounds, so the opponent never gets `stonewall_offers` offers in -- measured
+    # over the whole record it armed on a profitable price in 243 of 2234 open
+    # games and in zero bounded ones. Open games are exactly where it is least
+    # defensible: negotiation carries no inflation, so waiting costs nothing but
+    # a queue slot, and the game does not end for another 87 rounds.
+    #
+    # And it overrides our own bar. In the 243 firings we took 0.0718 of our
+    # valuation where the schedule said we were holding out for 0.2064, and 240
+    # of them ended the game at that price. Observed live: a buyer repeated
+    # 81.20 six times against a seller valuing the item at 80, and we signed for
+    # 1.20 while our own target stood at 97. Repeating one number six times is
+    # the whole exploit.
+    #
+    # With this on, the branch waits until refusing actually costs us -- the end
+    # of a bounded game, or the round cap of an open one. Ships off: a genuine
+    # stonewaller pays 0 either way, so the gain is real only if they move, and
+    # we have never refused one to find out.
+    stonewall_needs_endgame: bool = False
+    # A "never concede past the midpoint" rail was tried here and removed: it
+    # cannot bind. The ladder parks at value + 0.85 * (nearest rung - value)
+    # and the midpoint is value + 0.50 * (the same), so the ladder is already
+    # the stricter of the two wherever a midpoint can be computed at all -- and
+    # a midpoint needs `tradable_rungs`, which needs the pool to place us, which
+    # is exactly when the ladder runs. Off-pool it returns None and there is
+    # nothing to measure against either way.
+    # The server stops an open negotiation at this round and pays both $0, the
+    # same undocumented cap the bargaining family has. 547 of 2234 open games
+    # in the record -- 24.5% -- ended exactly there.
+    open_horizon_cap: int = 99
 
 
 @dataclass(frozen=True)

@@ -104,3 +104,15 @@ def costless_cap_on(monkeypatch):
     monkeypatch.setattr(bargaining, "P",
                         dataclasses.replace(params.BARGAINING,
                                             costless_hold_cap_on=True))
+
+
+@pytest.fixture
+def stonewall_waits(monkeypatch):
+    """Make the stonewall accept wait until refusing actually costs something."""
+    import dataclasses
+    from glee_agent import params
+    from glee_agent.strategies import negotiation
+    monkeypatch.setattr(negotiation, "P",
+                        dataclasses.replace(params.NEGOTIATION,
+                                            stonewall_needs_endgame=True))
+

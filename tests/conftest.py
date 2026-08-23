@@ -153,3 +153,14 @@ def settle_early(monkeypatch):
     from glee_agent.strategies import bargaining
     monkeypatch.setattr(bargaining, "P",
                         dataclasses.replace(params.BARGAINING, settle_early_on=True))
+
+
+@pytest.fixture
+def hold_open(monkeypatch):
+    """Walk a costless-delay open game against the real cap, not a 12-round one."""
+    import dataclasses
+    from glee_agent import params
+    from glee_agent.strategies import bargaining
+    monkeypatch.setattr(bargaining, "P",
+                        dataclasses.replace(params.BARGAINING,
+                                            costless_open_holds_on=True))

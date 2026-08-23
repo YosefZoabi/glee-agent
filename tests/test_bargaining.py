@@ -1235,3 +1235,120 @@ class TestARejectionIsChargedWhatItCosts:
                     "game_family": "bargaining",
                     "valid_actions": {"type": "offer"}})["alice_gain"] / 1_000_000.0
         assert ask < 0.76   # the shipped schedule opens this cell at 0.7623
+
+
+class TestAFreeClockIsNotADeadline:
+    """Regression: pot 1,000,000, our inflation 0%, hidden, no round limit.
+
+    We opened 850,000, they countered 420,000, we asked 761,444, and we signed
+    their 500,000 at round 4 -- of a game that runs to 99, in which waiting cost
+    us nothing at all.
+
+    Two faults, and the second is the larger. `costless_hold_share` is exactly
+    0.50, so an even split meets the bar rather than missing it. And the
+    open-game walk-down is keyed to `unbounded_soft_horizon` = 12 while the game
+    ends at `open_horizon_cap` = 99, so the bar is spent by round 20 and then
+    sits at the floor for seventy-nine rounds. The walk exists to price time
+    pressure; at delta 1.0 there is none until the cap.
+    """
+
+    def _game(self, round_, offer=0.50, delta=1.0, phase="decision"):
+        st = {"round": round_, "horizon_known": False, "phase": phase,
+              "money_to_divide": 1_000_000.0, "complete_information": False,
+              "messages_allowed": False, "current_player": "player_1",
+              "proposer": "player_2", "history": [], "delta_1": delta,
+              "last_offer": {"player_1_gain": offer * 1e6,
+                             "player_2_gain": (1 - offer) * 1e6,
+                             "proposer": "player_2", "round": round_}}
+        return {"game_state": st, "your_player": "player_1",
+                "game_family": "bargaining", "valid_actions": {"type": phase}}
+
+    def test_the_flag_ships_off(self):
+        from glee_agent import params
+        assert params.BARGAINING.costless_open_holds_on is False
+
+    def test_the_shipped_default_signs_an_even_split_immediately(self):
+        assert play(self._game(4))["decision"] == "accept"
+
+    def test_and_keeps_signing_it_all_the_way_down_the_game(self):
+        # The fault this class exists for: the bar is spent long before the cap.
+        for rd in (10, 20, 40, 60, 80):
+            assert play(self._game(rd))["decision"] == "accept", rd
+
+    def test_the_arm_refuses_it_while_refusing_is_free(self, hold_open):
+        for rd in (1, 4, 10, 20):
+            assert play(self._game(rd))["decision"] == "reject", rd
+
+    def test_the_arm_still_relaxes_as_the_real_cap_approaches(self, hold_open):
+        assert play(self._game(60))["decision"] == "accept"
+
+    def test_and_takes_anything_at_the_cap_rather_than_book_a_zero(self, hold_open):
+        assert play(self._game(98, offer=0.12))["decision"] == "accept"
+
+    def test_it_does_not_touch_a_player_whose_clock_runs(self, hold_open):
+        # delta 0.90: waiting is expensive, the walk-down is priced correctly,
+        # and this arm must leave it alone.
+        assert play(self._game(4, offer=0.50, delta=0.90))["decision"] == "accept"
+
+    def test_it_stays_under_the_measured_refusal_ceiling(self):
+        # Refusing 0.60+ at delta 1.0 returned -0.3057 of pot over 263 real
+        # refusals (sigma -9.9). Whatever we hold for has to sit below that.
+        from glee_agent import params
+        assert params.BARGAINING.costless_open_share < params.BARGAINING.costless_hold_cap
+
+
+class TestTheEndgameSeatIsPricedOnce:
+    """At delta 0.95 over twelve rounds with the last proposal ours, riding to
+    the end and demanding `final_round_demand` returns 0.97 * 0.95^11 = 0.5517
+    of the pot in round-one money -- IF the responder signs.
+
+    They sign 1,301 times out of 1,415 (91.9%). The other 114 took the $0, which
+    was strictly worse for them, and asking less does not help: 90.1% sign an ask
+    of 0.9 against 92.1% for 1.0. So the seat returns 0.5070, not 0.5517.
+
+    It used to be shaved twice -- once by `accept_slack`, which prices "they may
+    never concede" and so does not apply to a seat nobody can take from us, and
+    not at all by the refusal risk that does apply. Now it is priced once, by the
+    thing that actually happens.
+    """
+
+    def _bar(self, round_, delta=0.95, mx=12):
+        from glee_agent.strategies import bargaining as B
+        from glee_agent.params import BARGAINING as P
+        st = {"round": round_, "max_rounds": mx, "horizon_known": True,
+              "phase": "decision", "money_to_divide": 1.0,
+              "complete_information": True, "messages_allowed": False,
+              "current_player": "player_2", "proposer": "player_1", "history": [],
+              "delta_2": delta, "delta_1": 0.90,
+              "last_offer": {"player_2_gain": 0.35, "player_1_gain": 0.65,
+                             "proposer": "player_1", "round": round_}}
+        return max(B.stonewall_threshold(st, "player_2"),
+                   B.hold_out_value(st, "player_2") * P.accept_slack,
+                   B.endgame_hold_value(st, "player_2"),
+                   B.costless_hold_value(st, "player_2"))
+
+    def test_the_seat_is_worth_its_measured_return(self):
+        from glee_agent.params import BARGAINING as P
+        seat = P.final_round_demand * P.endgame_sign_rate * 0.95 ** 11
+        assert abs(seat - 0.5070) < 0.001
+
+    def test_the_bar_holds_that_value_across_the_game(self):
+        # In round-one money the floor is flat: waiting is already priced into it.
+        for rd in (5, 7, 9, 11):
+            assert abs(self._bar(rd) * 0.95 ** (rd - 1) - 0.5070) < 0.002, rd
+
+    def test_it_is_not_shaved_twice(self):
+        from glee_agent.params import BARGAINING as P
+        # Applying accept_slack on top would land at 0.4918.
+        assert self._bar(9) * 0.95 ** 8 > 0.5070 * P.accept_slack + 0.005
+
+    def test_a_seat_we_do_not_hold_is_worth_nothing(self):
+        from glee_agent.strategies import bargaining as B
+        st = {"round": 3, "max_rounds": 12, "horizon_known": True,
+              "phase": "decision", "money_to_divide": 1.0,
+              "complete_information": True, "messages_allowed": False,
+              "current_player": "player_1", "proposer": "player_2", "history": [],
+              "delta_1": 0.95, "delta_2": 0.90,
+              "last_offer": {"player_1_gain": 0.35, "player_2_gain": 0.65,
+                             "proposer": "player_2", "round": 3}}
+        assert B.endgame_hold_value(st, "player_1") == 0.0

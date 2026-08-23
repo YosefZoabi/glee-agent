@@ -1164,3 +1164,74 @@ class TestASweeperStillHasAClock:
     def test_it_signs_once_the_rounds_run_out(self, sweep_counter):
         # Round 10 of 12: refusing stops being free, so bank what is there.
         assert play(self._game(10, "decision", 9))["decision"] == "accept"
+
+
+class TestARejectionIsChargedWhatItCosts:
+    """The bar we defend has to be a bar the clock can pay for.
+
+    Measured over 23,617 offers we actually refused -- each an exact paired
+    counterfactual, since accepting is unilateral and terminal -- refusing stops
+    paying well below where our bar sits. At delta 0.95 in an open complete-
+    information game the break-even is 0.20 and the shipped bar is 0.62.
+
+    The mechanism is our own inflation, not the opponent's stubbornness: the
+    NOMINAL share we negotiate is right (0.667 against an SPE of 0.673), but we
+    take six rounds to reach it and lose 23% of it on the way.
+    """
+
+    def _state(self, d_me, d_them, mx, round_=1, offer=0.30):
+        st = {"round": round_, "horizon_known": mx is not None, "phase": "decision",
+              "money_to_divide": 1.0, "complete_information": True,
+              "messages_allowed": False, "current_player": "player_1",
+              "proposer": "player_2", "history": [],
+              "delta_1": d_me, "delta_2": d_them,
+              "last_offer": {"player_1_gain": offer, "player_2_gain": 1 - offer,
+                             "proposer": "player_2", "round": round_}}
+        if mx is not None:
+            st["max_rounds"] = mx
+        return st
+
+    def _bar(self, st):
+        from glee_agent.strategies import bargaining as B
+        return max(B.stonewall_threshold(st, "player_1"),
+                   B.hold_out_value(st, "player_1") * B.P.accept_slack,
+                   B.costless_hold_value(st, "player_1"))
+
+    def test_the_flag_ships_off(self):
+        from glee_agent import params
+        assert params.BARGAINING.settle_early_on is False
+
+    def test_the_accessors_track_the_flag(self, settle_early):
+        from glee_agent.strategies import bargaining as B
+        assert B.settle_rounds() == 9
+        assert B.counter_share() == 0.25
+        assert B.floor_accept_share() == 0.50
+
+    def test_the_shipped_bar_sits_far_above_the_break_even(self):
+        # 0.95 vs 0.90, open, complete: the record says refusing 0.20+ loses.
+        assert self._bar(self._state(0.95, 0.90, None)) > 0.55
+
+    def test_the_arm_brings_it_down(self, settle_early):
+        assert self._bar(self._state(0.95, 0.90, None)) < 0.50
+
+    def test_it_never_raises_the_bar_where_waiting_is_free(self, settle_early):
+        # At delta 1.0 holding out genuinely pays and the record agrees, so the
+        # arm must not drag that bar down with the rest.
+        assert self._bar(self._state(1.00, 0.80, 12)) > 0.80
+
+    def test_it_still_signs_at_the_endgame(self, settle_early):
+        st = self._state(0.90, 0.90, 12, round_=12, offer=0.10)
+        assert play({"game_state": st, "your_player": "player_1",
+                     "game_family": "bargaining",
+                     "valid_actions": {"type": "decision"}})["decision"] == "accept"
+
+    def test_it_opens_lower_because_haggling_is_priced_higher(self, settle_early):
+        # A real pot: `split_exactly` works in whole units, so a pot of 1.0
+        # rounds any demand to the whole thing and measures nothing.
+        st = dict(self._state(0.90, 0.90, 12), phase="offer", money_to_divide=1_000_000.0,
+                  proposer="player_1", current_player="player_1")
+        st["last_offer"] = None
+        ask = play({"game_state": st, "your_player": "player_1",
+                    "game_family": "bargaining",
+                    "valid_actions": {"type": "offer"}})["alice_gain"] / 1_000_000.0
+        assert ask < 0.76   # the shipped schedule opens this cell at 0.7623

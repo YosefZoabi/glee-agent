@@ -63,6 +63,40 @@ class BargainingParams:
     # 0.9 burned 47% of the result. Rejecting is priced over this many rounds of
     # inflation, not one, which is what makes an impatient player close early.
     rounds_to_settle: int = 3
+    # ...and 3 is measurably too few. Over 23,617 offers we actually refused --
+    # every one a paired counterfactual, because accepting is unilateral and
+    # terminal, so "sign it now" is `share * delta**(round-1)` and needs no model
+    # of the opponent -- refusing stops paying far below where our bar sits:
+    #
+    #   d_me 0.90 open complete   break-even 0.20   bar 0.505   -0.038/refusal
+    #   d_me 0.90  12  complete   break-even 0.20   bar 0.505   -0.020/refusal
+    #   d_me 0.95 open complete   break-even 0.20   bar 0.624   -0.014/refusal
+    #   d_me 1.00 open hidden     break-even 0.30   bar 0.500   -0.026/refusal
+    #
+    # No survivorship in that: a no-deal banks zero and is still counted, so the
+    # games holding out lost are in the sample. The cost is -0.0055 of pot per
+    # game across the whole record.
+    #
+    # The mechanism is our own clock, not the opponent. At delta 0.95 we sign a
+    # NOMINAL 0.667 against an SPE of 0.673 -- the number we negotiate is right --
+    # but we take six rounds to get there and inflation eats 23% of it, landing
+    # at 0.49 where the field banks 0.64. Pricing a rejection at three rounds
+    # when it really takes nine is what buys those six rounds.
+    #
+    # Offline, over 24,000 simulated games against configurations drawn from the
+    # real mix and opponents fitted to the real field, these three together move
+    # the percentile +0.031 (about +245 rating) against a +-45 noise floor
+    # measured by re-running the shipped policy on six independent worlds. Each
+    # response curve is monotone rather than a single lucky point, and the tuned
+    # accept bar lands closer to the measured break-even in 3 of 3 cells that
+    # move, and further from it in none.
+    #
+    # Ships OFF: it is still tuning, and tuning in this project has a long record
+    # of measuring nothing. It needs its own window on the real server.
+    settle_early_on: bool = False
+    settle_early_rounds: int = 9
+    settle_early_counter_share: float = 0.25
+    settle_early_min_accept: float = 0.50
     # Accept at this multiple of our continuation value. Slightly below 1.0
     # because one more round of inflation is a real cost and the opponent may
     # not concede at all.

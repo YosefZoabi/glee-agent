@@ -99,6 +99,27 @@ def _deltas(state: dict, slot: str) -> tuple[float, float]:
     return clamp(float(mine), 0.01, 1.0), clamp(float(theirs), 0.01, 1.0)
 
 
+def settle_rounds() -> int:
+    """How many rounds of our own inflation a rejection is charged.
+
+    See `settle_early_on` in params: three is what the shipped build assumes and
+    nine is what the record shows. Reading it through one accessor keeps the two
+    numbers from drifting apart across the four places that price a rejection.
+    """
+    return int(P.settle_early_rounds if P.settle_early_on else P.rounds_to_settle)
+
+
+def counter_share() -> float:
+    """The demand our evidence bar prices, once refusing has to pay for itself."""
+    return float(P.settle_early_counter_share if P.settle_early_on
+                 else P.realistic_counter_share)
+
+
+def floor_accept_share() -> float:
+    """Where the open-game walk-down stops."""
+    return float(P.settle_early_min_accept if P.settle_early_on else P.min_accept_share)
+
+
 def _continuation_value(state: dict, slot: str) -> float:
     """Our share of the pot, in today's dollars, if we reject and counter.
 
@@ -113,7 +134,7 @@ def _continuation_value(state: dict, slot: str) -> float:
     if is_final_round(state):
         return 0.0
     delta_me, delta_opp = _deltas(state, slot)
-    patience = delta_me ** max(1, P.rounds_to_settle)
+    patience = delta_me ** max(1, settle_rounds())
     # Capped: an uncapped share of 1.0 becomes "accept nothing below 97%", which
     # is how we rejected 72% of a 1,000,000 pot forty-nine times and banked $0.
     share = min(proposer_share(delta_me, delta_opp, None), P.never_demand_above)
@@ -403,7 +424,7 @@ def stonewall_threshold(state: dict, slot: str) -> float:
     """
     delta_me, _ = _deltas(state, slot)
     p = clamp(P.counter_success_rate, 0.0, 1.0)
-    demand = P.realistic_counter_share
+    demand = counter_share()
     denominator = 1.0 - (1.0 - p) * delta_me ** 2
     if denominator <= 1e-9:
         return demand
@@ -449,7 +470,7 @@ def _make_offer(game: dict) -> dict:
     # A high opening buys a long haggle, and an impatient player cannot afford
     # one: every round of it costs us `1 - delta_me` of whatever we finally win.
     # So the more our own clock hurts, the closer we open to the floor.
-    patience = delta_me ** max(1, P.rounds_to_settle)
+    patience = delta_me ** max(1, settle_rounds())
     opening = floor + (max(P.opening_demand, floor) - floor) * patience
     weight = (1.0 - progress(state, P.unbounded_soft_horizon)) ** P.concession_exponent
     demand = floor + (opening - floor) * weight
@@ -618,7 +639,7 @@ def _make_decision(game: dict) -> dict:
         # 92727cf1 for sixty-nine rounds to bank 274 of a 353,652 split. Time
         # pressure in an open-ended game can only ever be an argument for
         # signing sooner.
-        walked = threshold + (money * P.min_accept_share - threshold) * progress(
+        walked = threshold + (money * floor_accept_share() - threshold) * progress(
             state, P.unbounded_soft_horizon
         )
         threshold = min(threshold, walked)

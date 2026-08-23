@@ -132,3 +132,14 @@ def hide_rung(monkeypatch):
     monkeypatch.setattr(negotiation, "P",
                         dataclasses.replace(params.NEGOTIATION,
                                             hide_rung_from_last_word=True))
+
+
+@pytest.fixture
+def sweep_counter(monkeypatch):
+    """Answer a sweeper with a price his own inflation tells him to sign."""
+    import dataclasses
+    from glee_agent import params
+    from glee_agent.strategies import bargaining
+    monkeypatch.setattr(bargaining, "P",
+                        dataclasses.replace(params.BARGAINING,
+                                            sweep_counter_on=True))

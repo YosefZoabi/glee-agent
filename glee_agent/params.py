@@ -177,6 +177,25 @@ class BargainingParams:
     # sweeper leaves at the end. Early crumbs beat late crumbs, and against a
     # patient sweeper they beat the fair split that will never be offered.
     sweep_accept_margin: float = 1.5
+    # ...but stop ANSWERING a sweeper with an ask he was never going to take.
+    #
+    # Game 12416c63: pot 1,000,000, our inflation 0%, theirs 5%, twelve rounds,
+    # last word his. He repeated 199,167/800,833 on rounds 2, 4 and 6. We
+    # answered 850,000 then 824,698 then 802,270 -- asks that left him 150,000
+    # to 197,730 when his own standing demand was 800,833. Not one of them could
+    # ever have been signed, so all three rounds were spent for nothing and we
+    # took his 199,167 at round 6.
+    #
+    # A sweeper still has a clock. Repeating his demand costs him a round of his
+    # own inflation, so anything above `his demand * his delta` beats waiting for
+    # himself -- at 0.95 that is 760,791 against the 800,833 he is holding, and
+    # it leaves us 239,209 instead of 199,167. Price off HIS number and HIS
+    # inflation rather than our own schedule, and never ask to keep less than he
+    # has already offered us, so this can only move our take upward.
+    sweep_counter_on: bool = False
+    # Strictly above his indifference point, since exactly at it he is free to
+    # refuse. A hundredth of his discounted demand is enough to break the tie.
+    sweep_counter_sweetener: float = 0.01
 
     # --- Closing instead of haggling --------------------------------------
     # An impatient proposer cannot afford a negotiation. Two measurements over

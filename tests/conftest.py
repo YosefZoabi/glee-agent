@@ -107,14 +107,19 @@ def costless_cap_on(monkeypatch):
 
 
 @pytest.fixture
-def stonewall_waits(monkeypatch):
-    """Make the stonewall accept wait until refusing actually costs something."""
+def stonewall_caves(monkeypatch):
+    """Restore the old behaviour: take a stonewaller's price the moment it pays.
+
+    This is the inverse of the shipped default now that run37 turned
+    `stonewall_needs_endgame` on, and it exists so the tests can still pin what
+    the branch used to do.
+    """
     import dataclasses
     from glee_agent import params
     from glee_agent.strategies import negotiation
     monkeypatch.setattr(negotiation, "P",
                         dataclasses.replace(params.NEGOTIATION,
-                                            stonewall_needs_endgame=True))
+                                            stonewall_needs_endgame=False))
 
 
 

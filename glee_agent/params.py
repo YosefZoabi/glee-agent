@@ -359,28 +359,67 @@ class NegotiationParams:
     # the whole exploit.
     #
     # With this on, the branch waits until refusing actually costs us -- the end
-    # of a bounded game, or the round cap of an open one. Ships off: a genuine
-    # stonewaller pays 0 either way, so the gain is real only if they move, and
-    # we have never refused one to find out.
-    stonewall_needs_endgame: bool = False
+    # of a bounded game, or the round cap of an open one.
+    #
+    # run37 refused them to find out, over 5 hours against four controls. At the
+    # moment the gate opens the price on the table is known, so what caving pays
+    # is arithmetic rather than inference and every game is its own control --
+    # which is what made 23 games enough. The controls validate the arithmetic:
+    # they cave on sight, so they must bank exactly the caving number, and over
+    # 173 control games the largest deviation was 2.3e-9.
+    #
+    #   caving would have paid   0.0604 of our valuation
+    #   holding actually banked  0.1162
+    #   12 games better, 11 exactly equal, 0 worse   (sign test p = 0.00049)
+    #   23 of 23 closed -- no no-deals, no walk-aways
+    #
+    # The eleven ties are the argument. Those are games where they never moved
+    # and we signed the same price at round 97-98 instead of round 12; because
+    # negotiation has no discount term -- payoff is |price - value|, checked
+    # against the cache -- they cost exactly nothing, and the round-cap accept
+    # caught all eleven. So caving is weakly dominated: it did not win once.
+    #
+    # The cost is time, not money: negotiation throughput fell about 20% (96
+    # games per slot against 120-130), and 0 walk-aways in 23 only bounds that
+    # risk at ~12%. Ships ON.
+    stonewall_needs_endgame: bool = True
     # Do not name our own rung in an ask that cannot be accepted.
     #
-    # When the final price of the game is theirs, our second-to-last ask has no
-    # path to closing: they answer with a take-it-or-leave-it instead, and we
-    # sign anything profitable because a no-deal pays $0. Measured over 715
-    # bounded games where the last word was theirs, they signed that ask ZERO
-    # times -- 0.0% -- and in 535 of them (74.8%) it had already placed us
-    # exactly, because a seller asking under the next rung up cannot be standing
-    # on it.
+    # DEAD -- the premise was a survivorship artifact. Kept off, and kept here
+    # with the correction, because the mechanism works and only the reason for
+    # wanting it was wrong.
     #
-    # Observed live: seller at 800,000 asked 970,000 on round 9 of 10, which no
-    # 1,000,000 seller would ever do. The buyer answered 824,000 on the last
-    # round and we banked 24,000 against their 176,000.
+    # The claim was that when the final price of the game is theirs our
+    # second-to-last ask has no path to closing, so raising it is free. The
+    # supporting number -- "they signed that ask ZERO times in 715 bounded
+    # games" -- was produced by a scan that required a history entry on the
+    # final round:
     #
-    # Holding the ask at the next rung up costs no sales -- there were none to
-    # lose at 0 of 715 -- and leaves the opponent unable to tell which of two
-    # rungs it is facing. Ships off, and separately from
-    # `stonewall_needs_endgame` so the two do not pool.
+    #     if not final_entry:
+    #         continue
+    #
+    # A game whose deal closes on the round BEFORE the last never reaches the
+    # last round and carries no such entry, so every game where the ask was
+    # signed was dropped before the counting began. The statistic was zero by
+    # construction and more data would never have moved it.
+    #
+    # Scored correctly on run37, keyed on `agreed_round == max_rounds - 1`,
+    # which exists for every closed game:
+    #
+    #   controls   29 of 283 asks signed (10.2%)   banked 0.0436 of valuation
+    #   arm         3 of  72 asks signed ( 4.2%)   banked 0.0238
+    #
+    # So the ask closes about a tenth of the time, the flag halves that, and it
+    # banked less than all four controls (-2.5 sigma over all bounded games,
+    # -0.9 on the incomplete-information subset it is meant to serve). Neither
+    # margin clears this project's noise floor alone; what settles it is that
+    # the reason it was supposed to be free is false.
+    #
+    # The mechanism itself is sound and worth reviving if a real motive appears:
+    # it cut revealing asks to 10.2% against a 30.8-43.1% control band, and is
+    # correctly inert when the opponent already knows our valuation. Note it
+    # also only reaches the ladder path -- `_rung_price` returns before the
+    # floor when `tradable_rungs` is None or empty.
     hide_rung_from_last_word: bool = False
     # A "never concede past the midpoint" rail was tried here and removed: it
     # cannot bind. The ladder parks at value + 0.85 * (nearest rung - value)

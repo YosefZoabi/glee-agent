@@ -1077,3 +1077,90 @@ class TestHoldingOutStopsPayingAtTheTop:
         # A known horizon has an endgame seat worth playing for -- the
         # measurement was open games only.
         assert self._decide(their_offer=0.65, round_=3, max_rounds=12) == "reject"
+
+
+class TestASweeperStillHasAClock:
+    """Regression: game 12416c63. Pot 1,000,000, our inflation 0%, his 5%,
+    twelve rounds, the last proposal his.
+
+    He offered 199,167/800,833 on rounds 2, 4 and 6 without moving a cent. We
+    answered 850,000, then 824,698, then 802,270 -- leaving him 150,000 to
+    197,730 against a standing demand of 800,833 -- and then took his 199,167.
+    Three of our turns were spent on asks that could never have been signed.
+
+    Repeating his demand costs him a round of his own 5%, so 800,833 next round
+    is worth 760,791 now: anything above that beats waiting, for him, whatever
+    he thinks of us. That price leaves us 231,601.
+
+    The patience half is deliberately NOT the fix. He holds the last word, so
+    our equilibrium share falls as the clock runs -- 0.2649 at round 1, 0.1426 at
+    round 6, 0.0500 at round 11 -- and simply waiting makes this worse. Refusing
+    is only correct because there is a specific better ask to make.
+    """
+
+    POT = 1_000_000.0
+
+    def _state(self, round_, phase, history_rounds):
+        history = []
+        ours = {3: 824_698.0, 5: 802_270.0, 1: 850_000.0}
+        for r in range(1, history_rounds + 1):
+            if r % 2:
+                gain = ours.get(r, 800_000.0)
+                history.append({"round": r, "proposer": "player_1", "decision": "reject",
+                                "offer": {"player_1_gain": gain, "player_2_gain": self.POT - gain,
+                                          "proposer": "player_1", "round": r}})
+            else:
+                history.append({"round": r, "proposer": "player_2", "decision": "reject",
+                                "offer": {"player_1_gain": 199_167.0, "player_2_gain": 800_833.0,
+                                          "proposer": "player_2", "round": r}})
+        return {
+            "round": round_, "max_rounds": 12, "horizon_known": True, "phase": phase,
+            "money_to_divide": self.POT, "delta_1": 1.0, "delta_2": 0.95,
+            "complete_information": True, "messages_allowed": False,
+            "current_player": "player_1", "proposer": "player_2" if phase == "decision" else "player_1",
+            "history": history,
+            "last_offer": {"player_1_gain": 199_167.0, "player_2_gain": 800_833.0,
+                           "proposer": "player_2", "round": round_ if phase == "decision" else round_ - 1},
+        }
+
+    def _game(self, round_, phase, history_rounds):
+        return {"game_state": self._state(round_, phase, history_rounds),
+                "your_player": "player_1", "game_family": "bargaining",
+                "valid_actions": {"type": phase}}
+
+    def test_the_shipped_default_banks_his_crumb_at_round_six(self):
+        assert play(self._game(6, "decision", 5))["decision"] == "accept"
+
+    def test_the_arm_declines_it(self, sweep_counter):
+        assert play(self._game(6, "decision", 5))["decision"] == "reject"
+
+    def test_and_answers_with_a_price_his_own_clock_signs(self, sweep_counter):
+        offer = play(self._game(7, "offer", 6))
+        # 800,833 next round is worth 760,791 to him now.
+        assert offer["bob_gain"] > 800_833.0 * 0.95
+        assert offer["alice_gain"] > 199_167.0
+
+    def test_the_default_answers_with_an_ask_he_cannot_take(self):
+        offer = play(self._game(7, "offer", 6))
+        assert offer["bob_gain"] < 800_833.0 * 0.95
+
+    def test_it_never_bids_below_what_he_already_offered_us(self, sweep_counter):
+        offer = play(self._game(7, "offer", 6))
+        assert offer["alice_gain"] >= 199_167.0
+
+    def test_it_stays_out_of_games_where_waiting_costs_us(self, sweep_counter):
+        # Same shape, but our own inflation is 10% a round: the crumb in hand is
+        # worth more than a better number two rounds away, so take it.
+        game = self._game(6, "decision", 5)
+        game["game_state"]["delta_1"] = 0.9
+        assert play(game)["decision"] == "accept"
+
+    def test_it_stays_out_when_his_clock_does_not_burn(self, sweep_counter):
+        # He loses nothing by repeating himself, so there is no price to name.
+        game = self._game(6, "decision", 5)
+        game["game_state"]["delta_2"] = 1.0
+        assert play(game)["decision"] == "accept"
+
+    def test_it_signs_once_the_rounds_run_out(self, sweep_counter):
+        # Round 10 of 12: refusing stops being free, so bank what is there.
+        assert play(self._game(10, "decision", 9))["decision"] == "accept"

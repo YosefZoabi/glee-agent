@@ -302,6 +302,42 @@ def costless_hold_cap(state: dict, slot: str) -> float:
     return P.costless_hold_cap
 
 
+def sweep_counter_demand(game: dict, slot: str) -> float | None:
+    """The most we can ask a sweeper for and still expect him to sign.
+
+    He is holding a demand of his own and repeating it. Repeating it again costs
+    him one round of his own inflation, so his standing demand is worth
+    `demand * his delta` to him next round -- and anything above that is better
+    for him than waiting, whatever he thinks of us. That is the price, and it is
+    read off his behaviour rather than assuming he plays an equilibrium.
+
+    Returns None when there is nothing to price against: no visible delta of
+    his, no standing demand, or an opponent who loses nothing by waiting.
+    """
+    state = game["game_state"]
+    pot = number(state, "money_to_divide", 0.0) or 0.0
+    offer = state.get("last_offer") or {}
+    if pot <= 0 or offer.get("proposer") != OPPOSITE[slot]:
+        return None
+    if not state.get("complete_information", False):
+        return None
+    delta_them = number(state, _DELTA_KEY[OPPOSITE[slot]], None)
+    if delta_them is None or delta_them >= 1.0:
+        return None                    # his clock does not burn; nothing to trade on
+    his_demand = number(offer, f"{OPPOSITE[slot]}_gain", None)
+    ours_on_table = number(offer, f"{slot}_gain", 0.0) or 0.0
+    if his_demand is None or his_demand <= 0:
+        return None
+    # What he needs now to beat repeating himself, plus a sliver so the choice
+    # is not a tie.
+    his_price = his_demand * delta_them * (1.0 + P.sweep_counter_sweetener)
+    if his_price >= his_demand:
+        return None                    # the sweetener ate the whole gain
+    # Never propose to keep less than he has already put in front of us: this is
+    # meant to raise our take, never to bid against ourselves.
+    return max((pot - his_price) / pot, ours_on_table / pot)
+
+
 def opponent_is_sweeping(game: dict, slot: str) -> bool:
     """Are they running the endgame sweep on us?
 
@@ -455,6 +491,15 @@ def _make_offer(game: dict) -> dict:
         elif left <= P.endgame_rounds and not _final_round_is_ours(state, slot):
             # They hold the last word. Make an offer worth signing.
             demand = min(demand, P.endgame_demand_cap)
+
+    # Answering a sweeper with our own schedule spends rounds on asks he was
+    # never going to sign. Price off his standing demand and his inflation
+    # instead -- see `sweep_counter_on`. Floored at what he already offered us,
+    # so it can only raise our take.
+    if P.sweep_counter_on and opponent_is_sweeping(game, slot):
+        counter = sweep_counter_demand(game, slot)
+        if counter is not None:
+            demand = min(demand, counter)
     demand = clamp(demand, 0.0, 1.0 - P.min_opponent_share)
 
     mine, theirs = split_exactly(money, demand)
@@ -496,6 +541,42 @@ def _make_decision(game: dict) -> dict:
         if my_gain >= money * P.final_round_demand:
             return {"decision": "accept"}
         return {"decision": "reject"}
+
+    if opponent_is_sweeping(game, slot) and P.sweep_counter_on:
+        # Before banking his crumb, check whether we have a better ask that his
+        # OWN clock tells him to sign. Declining here is only defensible when we
+        # can name that number and delay is genuinely free for us -- game
+        # 12416c63 took 199,167 at round 6 while 231,601 was available at round 7
+        # and he had shown he would repeat his demand rather than withdraw it.
+        #
+        # Deliberately not a blanket "wait longer". Because the last word is his,
+        # our equilibrium share FALLS as the clock runs -- 0.2649 at round 1 down
+        # to 0.0500 at round 11 in that game -- so patience on its own makes this
+        # worse, not better. What pays is having something specific to ask for.
+        counter = sweep_counter_demand(game, slot)
+        delta_me, delta_them = _deltas(state, slot)
+        left_now = rounds_left(state, 0)
+        max_rounds = number(state, "max_rounds", None)
+        here = int(number(state, "round", 1) or 1)
+        beats_his_sweep = False
+        if counter is not None and max_rounds is not None and delta_them < 1.0:
+            # His alternative to our counter is not always "repeat myself". Near
+            # the end it is the sweep itself, and that is worth more to him the
+            # closer it gets. Our counter lands one round from here, so compare
+            # the two in his money at that point: he signs only while
+            #   his price  >=  what the sweep leaves him, discounted back.
+            his_sweep = money - _swept_endgame_value(state, slot, money)
+            steps = max(0, int(max_rounds) - 1 - here)
+            beats_his_sweep = money * (1.0 - counter) >= his_sweep * delta_them ** steps
+        if (
+            counter is not None
+            and beats_his_sweep
+            and delta_me >= P.costless_delay_delta
+            and left_now is not None
+            and left_now > P.endgame_rounds
+            and counter * money > my_gain
+        ):
+            return {"decision": "reject"}
 
     if opponent_is_sweeping(game, slot):
         # The mirror image, from the losing side. Once they hold the last word

@@ -157,8 +157,17 @@ class TestAStandingOfferFromSomeoneWhoHasStoppedNegotiating:
             **kwargs,
         )
 
-    def test_takes_the_offer_once_they_have_stopped_moving(self):
-        assert play(self._game(815_000, 8))["decision"] == "AcceptOffer"
+    def test_recognises_them_but_does_not_pay_yet(self):
+        # The branch arms here -- eight identical offers, 15,000 of profit -- but
+        # run37 showed paying now is never better than paying at the cap, so the
+        # rescue is deferred rather than cancelled. See `stonewall_needs_endgame`.
+        assert play(self._game(815_000, 8))["decision"] == "RejectOffer"
+
+    def test_and_still_rescues_the_game_before_the_cap(self):
+        # 85bd702f itself: the 0-0 this class exists to prevent. Signing 815,000
+        # at round 98 banks the same 15,000 that signing at round 9 would have,
+        # because negotiation has no discount term.
+        assert play(self._game(815_000, 97))["decision"] == "AcceptOffer"
 
     def test_holds_out_while_they_are_still_moving(self):
         # One cent of movement is still movement: this is the 3ee13da4 shape,
@@ -466,29 +475,39 @@ class TestNotBlinking:
         assert params.NEGOTIATION.stonewall_respects_ultimatum is False
         assert params.NEGOTIATION.known_zone_floor == 0.0
 
-    def test_by_default_we_still_fold_to_a_stonewaller(self):
-        assert play(self._stonewalled())["decision"] == "AcceptOffer"
+    def test_by_default_we_no_longer_fold_to_a_stonewaller(self):
+        # Round 8 of 10 leaves three rounds, so refusing is still free.
+        assert play(self._stonewalled())["decision"] == "RejectOffer"
+
+    def test_but_we_do_fold_once_the_clock_is_real(self):
+        assert play(self._stonewalled(round_=9))["decision"] == "AcceptOffer"
+
+    # The three below test OTHER flags, so they pin `stonewall_needs_endgame`
+    # back off: with it on, the endgame gate decides these games before the flag
+    # under test gets a say, and the test would pass for the wrong reason.
 
     def test_the_arm_holds_the_ultimatum_instead(self, monkeypatch):
         # Two rounds left of ten with them proposing: the last word is ours, and
         # 216 of 216 last-word offers we have made were accepted.
-        self._arm(monkeypatch, stonewall_respects_ultimatum=True)
+        self._arm(monkeypatch, stonewall_respects_ultimatum=True,
+                  stonewall_needs_endgame=False)
         assert play(self._stonewalled(round_=9))["decision"] != "AcceptOffer"
 
     def test_the_arm_still_folds_when_the_last_word_is_theirs(self, monkeypatch):
-        self._arm(monkeypatch, stonewall_respects_ultimatum=True)
+        self._arm(monkeypatch, stonewall_respects_ultimatum=True,
+                  stonewall_needs_endgame=False)
         game = self._stonewalled(round_=8, max_rounds=10)
         assert play(game)["decision"] == "AcceptOffer"
 
     def test_the_known_zone_floor_refuses_a_thin_slice(self, monkeypatch):
         # Selling at 100 to a buyer worth 200: a price of 110 is a tenth of the
         # surplus, which is the cell we currently sign at 0.3132.
-        self._arm(monkeypatch, known_zone_floor=0.45)
+        self._arm(monkeypatch, known_zone_floor=0.45, stonewall_needs_endgame=False)
         game = self._stonewalled(my_value=100.0, their=200.0, round_=4, max_rounds=10)
         assert play(game)["decision"] == "RejectOffer"
 
     def test_the_known_zone_floor_still_takes_a_fair_split(self, monkeypatch):
-        self._arm(monkeypatch, known_zone_floor=0.45)
+        self._arm(monkeypatch, known_zone_floor=0.45, stonewall_needs_endgame=False)
         hist = [{"offer": {"price": 160.0, "from_player": "player_2", "round": r}}
                 for r in range(1, 8)]
         game = negotiation_game(
@@ -510,6 +529,11 @@ class TestAStonewallerIsNotEvidenceUntilTheClockIsReal:
     most 10 rounds, so the opponent never lands `stonewall_offers` offers. Over
     the record it armed on a profitable price in 243 of 2234 open games and zero
     bounded ones, taking 0.0718 of our valuation where the schedule asked 0.2064.
+
+    run37 refused them instead, and caving lost or tied every time: 12 games
+    better, 11 identical, 0 worse, 23 of 23 still closing (sign test p =
+    0.00049). So `stonewall_needs_endgame` now ships ON and these tests pin
+    refusal as the default; `stonewall_caves` restores the old behaviour.
     """
 
     def _game(self, *, round_, their_price=81.2, my_value=80.0, max_rounds=None):
@@ -534,29 +558,31 @@ class TestAStonewallerIsNotEvidenceUntilTheClockIsReal:
         }
         return {"game_state": state, "your_player": "player_1", "game_family": "negotiation"}
 
-    def test_the_shipped_default_caves_on_the_sixth_repeat(self):
-        # Guards the SHIPPED behaviour: flipping the flag changes this one.
-        assert play(self._game(round_=12))["decision"] == "AcceptOffer"
+    def test_the_shipped_default_keeps_refusing_mid_game(self):
+        # Guards the SHIPPED behaviour, which run37 flipped.
+        assert play(self._game(round_=12))["decision"] == "RejectOffer"
 
     def test_it_held_out_up_to_that_point(self):
         for round_ in (2, 4, 6, 8, 10):
             assert play(self._game(round_=round_))["decision"] == "RejectOffer", round_
 
-    def test_the_arm_keeps_refusing_mid_game(self, stonewall_waits):
-        assert play(self._game(round_=12))["decision"] == "RejectOffer"
-
-    def test_the_arm_still_refuses_much_later(self, stonewall_waits):
+    def test_it_still_refuses_much_later(self):
         # Round 40 of 99: refusing is still free, so there is still nothing to buy
         # by caving.
         assert play(self._game(round_=40))["decision"] == "RejectOffer"
 
-    def test_but_takes_it_when_the_cap_is_in_sight(self, stonewall_waits):
-        # At the real end of an open game, 1.20 beats the $0 a cap pays.
+    def test_but_takes_it_when_the_cap_is_in_sight(self):
+        # At the real end of an open game, 1.20 beats the $0 a cap pays. This is
+        # the half of run37 that cost nothing: eleven games signed the same price
+        # here that caving would have signed 85 rounds earlier.
         assert play(self._game(round_=98))["decision"] == "AcceptOffer"
 
-    def test_a_bounded_endgame_still_signs(self, stonewall_waits):
-        # Rounds genuinely scarce -- the branch should behave as it always did.
+    def test_a_bounded_endgame_still_signs(self):
+        # Rounds genuinely scarce -- the branch behaves as it always did.
         assert play(self._game(round_=10, max_rounds=10))["decision"] == "AcceptOffer"
+
+    def test_the_old_behaviour_caved_on_the_sixth_repeat(self, stonewall_caves):
+        assert play(self._game(round_=12))["decision"] == "AcceptOffer"
 
 
 
@@ -567,11 +593,13 @@ class TestAnAskThatCannotCloseShouldNotTalk:
     price named us exactly. The buyer held the last word, answered 824,000, and
     we banked 24,000 against their 176,000.
 
-    The ask bought nothing to pay for that: over 715 bounded games where the
-    final price was theirs, they signed our second-to-last ask ZERO times -- they
-    always answered with their own take-it-or-leave-it instead, which we then
-    sign because a no-deal pays $0. In 535 of those 715 the ask had already
-    placed us.
+    The leak is real; the fix is off. It was justified by "that ask is never
+    signed anyway -- 0 times in 715 bounded games", which counted only games
+    that reached the final round and so dropped every game the ask had closed a
+    round earlier. Scored on `agreed_round`, the ask closes 10.2% of the time
+    (29 of 283) and the flag cuts that to 4.2%, banking less than all four
+    controls. These tests therefore guard the SHIPPED behaviour (leak and all)
+    and pin the flag's mechanism for whenever a real motive for it turns up.
     """
 
     def _ask(self, *, round_, max_rounds, my_value=800000.0, slot="player_1"):

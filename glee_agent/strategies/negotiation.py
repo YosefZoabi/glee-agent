@@ -245,12 +245,15 @@ def _rung_price(state: dict, slot: str, role: str, my_value: float,
         reached = max(reached, len(live) - min(len(live), usable))
     price = price_for(live[min(reached, len(live) - 1)])
 
-    # If the LAST price of the game is theirs, this one cannot close it: they
-    # answer with a take-it-or-leave-it instead, and we sign anything profitable
-    # because a no-deal pays $0. Measured over 715 such games they signed our
-    # penultimate ask exactly ZERO times, while it had already named our rung in
-    # 535 of them. An ask that cannot be accepted should at least not be
-    # informative, so hold it where two rungs could have made it.
+    # Hold the ask where two rungs could have made it, so it does not name ours.
+    #
+    # OFF by default and staying that way. This was built on "when the last
+    # price is theirs our ask cannot close, so raising it is free", measured as
+    # 0 signings in 715 games. That measurement only looked at games that
+    # reached the final round, which no game does if our ask closed it a round
+    # earlier -- it excluded its own counterexamples. Scored on `agreed_round`
+    # instead, the ask closes 10.2% of the time (29/283) and this flag halves
+    # that. See `hide_rung_from_last_word` in params for the full correction.
     if P.hide_rung_from_last_word and final_offer_is_theirs(state, slot):
         floor_ = _non_revealing_floor(state, slot, role)
         if floor_ is not None:

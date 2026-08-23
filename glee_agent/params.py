@@ -97,10 +97,22 @@ class BargainingParams:
     settle_early_rounds: int = 9
     settle_early_counter_share: float = 0.25
     settle_early_min_accept: float = 0.50
-    # Accept at this multiple of our continuation value. Slightly below 1.0
-    # because one more round of inflation is a real cost and the opponent may
-    # not concede at all.
-    accept_slack: float = 0.97
+    # Accept at this multiple of our continuation value. Below 1.0 because one
+    # more round of inflation is a real cost and the opponent may not concede at
+    # all -- both of which are risks on the PREDICTIVE half of the bar. The
+    # endgame seat used to run through here too and no longer does; it carries a
+    # different risk and is priced by `endgame_sign_rate` instead.
+    #
+    # 0.97 -> 0.99 by request. Measured first, over 14,000 simulated games on
+    # four independent worlds: 0.93/0.95 score 0.6331, and 0.97/0.99/1.00 all
+    # score 0.6319 -- a spread of 0.0012 percentile, about 10 rating points,
+    # against a +-45 noise floor. It is inert because after the endgame seat
+    # moved out, `hold_out_value * accept_slack` is rarely the term the max
+    # picks; `stonewall_threshold`, the seat, and `costless_hold_value` usually
+    # bind first. Directionally it raises the bar in the delta 0.90/0.95 cells
+    # where 23,617 refused offers say the bar is already too high, so if this
+    # ever stops being inert it should move the other way.
+    accept_slack: float = 0.99
     # With this many rounds left, a no-deal ($0, bottom-percentile) outranks any
     # theoretical gain, so we accept anything at or above `endgame_floor`.
     endgame_rounds: int = 2

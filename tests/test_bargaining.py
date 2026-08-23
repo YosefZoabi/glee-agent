@@ -1343,12 +1343,17 @@ class TestTheEndgameSeatIsPricedOnce:
         assert self._bar(9) * 0.95 ** 8 > 0.5070 * P.accept_slack + 0.005
 
     def test_a_seat_we_do_not_hold_is_worth_nothing(self):
+        # player_1 opens, so player_1 proposes on odd rounds and player_2 on even
+        # ones. Over twelve rounds the last proposal is therefore player_2's, and
+        # player_1 is deciding on an even round -- get that parity wrong and the
+        # state describes a game that cannot happen.
         from glee_agent.strategies import bargaining as B
-        st = {"round": 3, "max_rounds": 12, "horizon_known": True,
+        st = {"round": 4, "max_rounds": 12, "horizon_known": True,
               "phase": "decision", "money_to_divide": 1.0,
               "complete_information": True, "messages_allowed": False,
               "current_player": "player_1", "proposer": "player_2", "history": [],
               "delta_1": 0.95, "delta_2": 0.90,
               "last_offer": {"player_1_gain": 0.35, "player_2_gain": 0.65,
-                             "proposer": "player_2", "round": 3}}
+                             "proposer": "player_2", "round": 4}}
+        assert B._final_round_is_ours(st, "player_1") is False
         assert B.endgame_hold_value(st, "player_1") == 0.0

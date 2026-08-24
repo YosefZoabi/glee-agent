@@ -358,9 +358,15 @@ def _seller_message(game: dict) -> dict:
     the whole difference. Observed: buyers refusing twenty straight rounds of
     genuinely honest recommendations, which is a failure to convince, not a
     failure to signal.
+
+    That argument assumes a buyer who reads. Against the actual field it does
+    not hold: crossing from the binary channel to this one costs us 10 to 18
+    points of sell rate in every value band, against the same opponents, while
+    the field's sell rate goes UP. See `bare_recommendation`, which sends these
+    games the two words the binary half sends instead.
     """
     recommends = _seller_recommends(game)
-    if not SEND_MESSAGES:
+    if not SEND_MESSAGES or P.bare_recommendation:
         # Text mode is the same decision the binary half of these games sends as
         # a bare yes/no, so it is sent as a bare yes/no. Nothing is argued, and
         # nothing about us is volunteered. It cannot be empty: `safety.sanitize`

@@ -631,6 +631,34 @@ class PersuasionParams:
     # A seller who signals "no" gives up their own revenue, so the signal is
     # credible; only override it if it has proven to be noise.
     trust_negative_signal: bool = True
+    # Send the text-mode recommendation as a bare "Recommended." / "Not
+    # recommended." -- the same two words the binary half of these games sends
+    # as a yes/no -- instead of the pitch with track record and arithmetic.
+    #
+    # The server draws the channel per game, roughly half `binary` and half
+    # `text`, and it is drawn independently of the opponent, so the two halves
+    # face the same buyers. Our sell rate does not survive the crossing:
+    #
+    #     v/price   binary    text     text - binary
+    #       1.2     0.3381   0.2336       -0.1044
+    #       2.0     0.6686   0.5103       -0.1583
+    #       3.0     0.7987   0.6203       -0.1784
+    #       4.0     0.8654   0.7377       -0.1276
+    #
+    # Same direction in every band, n=459-1001 per cell. And text is not simply
+    # harder: the field sells MORE in text than in binary (0.8887 against our
+    # buyer, versus 0.8492). It is harder only for us. In text games where blind
+    # buying already pays we sell 0.7286 against the field's 0.8887 -- the only
+    # cell in persuasion where we lose to the field at all.
+    #
+    # The reading is that a large part of the field matches on tokens rather
+    # than reading prose, so a recommendation that arrives as a sentence does
+    # not arrive at all. Our own buyer is the same shape: `_is_positive` matches
+    # a hand-written list of 38 negative phrases.
+    #
+    # Whether a buyer answers "Recommended." the way it answers "yes" is THEIR
+    # move, so no replay can price this and it ships off, behind a real A/B.
+    bare_recommendation: bool = False
 
 
 # Every family is played as though the free-text channel did not exist.

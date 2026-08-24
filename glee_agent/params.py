@@ -628,6 +628,73 @@ class PersuasionParams:
     # round.
     explore_rounds: int = 2
     explore_tolerance: float = 0.85
+    # Read the seller's rationing when no purchase has been made to read
+    # instead. `_buyer_credibility` only updates on rounds we BUY, so in a cell
+    # whose prior starts under the buyer's bar it never updates: we decline,
+    # learn nothing, and decline for the rest of the game. Five of the fifteen
+    # cells sit there -- the explore gate needs p*m >= 0.85 to take a first
+    # read, and these are below it -- which is 5,355 of our 15,827 buyer games
+    # banking exactly zero:
+    #
+    #     p      m      p*m     field buyer earns   below zero
+    #     0.33   1.20   0.400        +0.0049           5.3%
+    #     0.33   1.25   0.417        +0.0106           5.8%
+    #     0.33   2.00   0.667        +0.1244           7.0%
+    #     0.50   1.20   0.600        +0.0261           3.2%
+    #     0.50   1.25   0.625        +0.0321           7.7%
+    #
+    # (per unit staked, measured off the opposing buyer in our own seller
+    # games). The field clears zero in every one, so our zero is last place.
+    #
+    # `signal_posterior` computes the belief this needs and was unwired for
+    # losing money -- p/rate is a CEILING, exact only if the seller praises
+    # every high unit, and it had been validated only on rounds we already
+    # wanted to buy. Both objections are now answered on unselected data. In
+    # the six cells where p*v > price our buyer takes EVERY recommendation, so
+    # the rate never touches the decision there:
+    #
+    #   h, the share of HIGH units the field praises, over 10 cells:  1.015
+    #     (sd 0.039 -- the ceiling is essentially tight, not merely a bound)
+    #   p/rate against realised quality over 28 cell-buckets:  +0.0010 (sd 0.043)
+    #   the RUNNING belief, bucketed by what it held going into each round:
+    #     +0.0389 (sd 0.0139) over 7 buckets, conservative in every one
+    #
+    # And the rationing is a strong signal, not noise: sellers praising 25% of
+    # rounds come in 91.1% high, those praising 99% come in 66.4%.
+    #
+    # Ships off. What a replay cannot price is whether buying changes how the
+    # seller plays the rest of the game, so this needs a real A/B.
+    rationing_belief: bool = False
+    # Surplus the rationing belief must clear, on top of the price. The estimate
+    # saturates optimistically where p/rate hits its cap, so do not buy at the
+    # indifference point -- but the margin is doing more work than that here.
+    #
+    # Four of the five frozen cells fail the ceiling test: pooled over the cell,
+    # p/P(rec) sits BELOW the buyer's bar, so even a seller praising every high
+    # unit would not on average offer a recommendation worth taking. Buying
+    # there is a bet on picking the honest tail WITHIN the cell, which is
+    # precisely the bet that sank this idea last time, and nothing in our logs
+    # can confirm it. Swept over the frozen games:
+    #
+    #     margin   backed games   backed value   speculative   spec share
+    #      0.05         799           2218           670          23%
+    #      0.10         794           2204           308          12%
+    #      0.15         768           2154             0           0%
+    #
+    # 0.15 keeps 97% of the backed value and takes the speculative exposure to
+    # exactly zero, with no cell-specific code: together with `rationing_cap`
+    # it puts the required belief above 0.95 in two of those cells, which is
+    # unreachable by construction, and no game reaches it in the other two.
+    #
+    # The asymmetry settles it. Field buyers earn only +0.005 to +0.032 per unit
+    # staked in the four thin cells against +0.124 in the backed one, so winning
+    # the bet barely moves a percentile and losing it puts us under the 3-8% of
+    # buyers who finish below zero.
+    rationing_margin: float = 0.15
+    # p/rate saturates at 1.0 and is optimistic by 0.03-0.08 when it does; hold
+    # it below so a seller who rations hard early cannot pin the belief at
+    # certainty.
+    rationing_cap: float = 0.95
     # A seller who signals "no" gives up their own revenue, so the signal is
     # credible; only override it if it has proven to be noise.
     trust_negative_signal: bool = True

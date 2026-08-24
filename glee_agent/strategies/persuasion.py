@@ -452,13 +452,29 @@ def signal_posterior(game: dict, p: float) -> float:
     both: better negative detection lowers `rate`, which raises `p / rate`, so
     the estimator went live materially more aggressive than the version measured.
 
-    The idea may still be sound. It needs validating under the current
-    classifier, on rounds we did not already want to buy, before it goes back in.
+    Both objections are now answered, on rounds we did not choose. In the six
+    cells where p*v > price the buyer takes EVERY recommendation, so the rate
+    never enters the decision and the sample is unselected. There:
+
+      h, the share of HIGH units the field praises, is 1.015 (sd 0.039) over 10
+        cells -- so p/rate is a tight ceiling, not just an upper bound
+      p/rate against realised quality is unbiased over 28 cell-buckets:
+        +0.0010 (sd 0.0429)
+      the RUNNING estimate, which is what actually ships, bucketed by the belief
+        it held going INTO each round: +0.0389 (sd 0.0139) over 7 buckets, and
+        conservative in every single one -- it understates the seller
+
+    The rationing is a strong signal: sellers praising 25% of rounds come in
+    91.1% high, those praising 99% come in 66.4%.
+
+    Wired back in behind `rationing_belief`, additively -- it can only turn a
+    refusal into a purchase -- and with a margin, since the estimate is
+    optimistic exactly where it saturates.
     """
     rate = recommendation_rate(game)
     if rate is None or rate <= 0.0:
         return p
-    raw = clamp(p / rate, 0.0, 1.0)
+    raw = clamp(p / rate, 0.0, P.rationing_cap)
     seen = len(history(game))
     return clamp(p + (raw - p) * (seen / (seen + P.rate_prior_weight)), 0.0, 1.0)
 
@@ -528,7 +544,18 @@ def _buyer_decision(game: dict) -> dict:
     if round_number <= P.explore_rounds:
         # Buying is the only way to observe quality; pay a little for the read.
         return {"decision": "yes" if expected >= price * P.explore_tolerance else "no"}
-    return {"decision": "yes" if expected > price else "no"}
+    if expected > price:
+        return {"decision": "yes"}
+    if P.rationing_belief:
+        # Nothing was bought, so `belief` above is still the bare prior and will
+        # stay there for the rest of the game -- an absorbing refusal. What the
+        # seller declines to praise is visible without buying anything, so read
+        # that instead. Strictly additive: this branch only ever converts a
+        # refusal into a purchase, which makes the counterfactual a count.
+        lifted = signal_posterior(game, p)
+        if lifted * v + (1.0 - lifted) * u > price * (1.0 + P.rationing_margin):
+            return {"decision": "yes"}
+    return {"decision": "no"}
 
 
 def play(game: dict) -> dict:

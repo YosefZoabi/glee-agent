@@ -406,6 +406,73 @@ class TestRegimeAndNonBuyer:
         assert buyer_ignores_us(game) is False
 
 
+class TestTheBareRecommendationArm:
+    """The channel split: persuasion can go bare without silencing the others.
+
+    Measured over every persuasion game on record, crossing from the `binary`
+    channel to `text` costs us 10-18 points of sell rate in every value band
+    (n=459-1001 per cell) against the same opponents -- while the field's sell
+    rate goes UP across the same crossing. The reading is that much of the field
+    matches tokens rather than reading prose. Whether they answer "Recommended."
+    the way they answer "yes" is their move, so this ships off and is decided by
+    an A/B, not by these tests.
+    """
+
+    def _msg(self, quality, **kw):
+        history = [persuasion_round(round_=r, message="yes", bought=True, quality="high")
+                   for r in range(1, 6)]
+        return play(persuasion_game(
+            action_type="seller_message", slot="player_1", quality=quality,
+            p=kw.get("p", 0.9), v=kw.get("v", 125), u=0.0, price=kw.get("price", 100),
+            round_=6, total_rounds=20, history=history,
+        ))["message"]
+
+    def test_the_flag_ships_off(self):
+        from glee_agent import params
+        assert params.PERSUASION.bare_recommendation is False
+
+    def test_the_shipped_default_still_pitches(self):
+        assert "Recommending this one." in self._msg("high")
+
+    def test_the_arm_sends_the_same_two_words_the_binary_half_sends(self, bare_recommendation):
+        assert self._msg("high") == "Recommended."
+        assert self._msg("low", p=0.3, v=100, price=60) == "Not recommended."
+
+    def test_the_arm_volunteers_nothing_else(self, bare_recommendation):
+        for text in (self._msg("high"), self._msg("low", p=0.3, v=100, price=60)):
+            for leak in ("125", "100", "record", "arithmetic", "track", "costs you"):
+                assert leak not in text.lower()
+
+    def test_the_arm_never_sends_an_empty_message(self, bare_recommendation):
+        # safety.sanitize refills an empty seller_message with the fallback
+        # pitch, which would put a sales line straight back on the wire.
+        for text in (self._msg("high"), self._msg("low", p=0.3, v=100, price=60)):
+            assert text.strip()
+
+    def test_the_arm_does_not_touch_the_other_two_families(self, bare_recommendation):
+        # The defect being fixed is persuasion's alone: there the message IS the
+        # move, while a bargaining or negotiation message rides alongside a
+        # number that already says the same thing.
+        from glee_agent.strategies import bargaining, negotiation
+        assert bargaining.SEND_MESSAGES is True
+        assert negotiation.SEND_MESSAGES is True
+
+    def test_the_arm_still_says_yes_exactly_when_the_binary_half_would(self, bare_recommendation):
+        # Same decision, different wording -- the arm changes the channel, not
+        # the policy. Anything else would confound the A/B.
+        from glee_agent.strategies.persuasion import _seller_recommends
+        for quality, kw in (("high", {}), ("low", {"p": 0.3, "v": 100, "price": 60})):
+            history = [persuasion_round(round_=r, message="yes", bought=True, quality="high")
+                       for r in range(1, 6)]
+            game = persuasion_game(
+                action_type="seller_message", slot="player_1", quality=quality,
+                p=kw.get("p", 0.9), v=kw.get("v", 125), u=0.0, price=kw.get("price", 100),
+                round_=6, total_rounds=20, history=history,
+            )
+            said_yes = self._msg(quality, **kw) == "Recommended."
+            assert said_yes is _seller_recommends(game)
+
+
 class TestTheTextChannelSaysOnlyYesOrNo:
     """Shipped behaviour: text mode carries the recommendation and nothing else.
 

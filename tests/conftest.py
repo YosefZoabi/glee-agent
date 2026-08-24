@@ -50,6 +50,21 @@ def messages_on(monkeypatch):
 
 
 @pytest.fixture
+def bare_recommendation(monkeypatch):
+    """Persuasion alone goes bare, while bargaining and negotiation keep prose.
+
+    This is the whole point of the flag: `SEND_MESSAGES` is global, so before it
+    existed the only way to send a bare recommendation was to silence all three
+    families at once.
+    """
+    import dataclasses
+    from glee_agent import params
+    from glee_agent.strategies import persuasion
+    monkeypatch.setattr(persuasion, "P",
+                        dataclasses.replace(params.PERSUASION, bare_recommendation=True))
+
+
+@pytest.fixture
 def messages_off(monkeypatch):
     """Force the silent build on, whatever the build ships.
 

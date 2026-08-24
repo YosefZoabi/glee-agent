@@ -5,6 +5,85 @@ from glee_agent.strategies.negotiation import play
 from tests.fixtures import negotiation_game
 
 
+class TestSeatsWithNoCounterparty:
+    """The top rung as seller and the bottom rung as buyer cannot trade at all.
+
+    Valuations sit on four rungs -- 80, 100, 120, 150 -- of one shared scale
+    (checked over all 5,035 complete-information games on record: never once
+    crossed). A seller trades only with a buyer above them, a buyer only with a
+    seller below them. So these two seats have no counterparty that exists, and
+    that follows from OUR value alone, which is why it survives incomplete
+    information. 18.1% of our negotiation games, 85,705 turns, ~0 payoff.
+    """
+
+    SCALES = (1.0, 100.0, 10000.0)
+
+    def _decide(self, *, slot, my_value, offer=90.0, **kw):
+        return play(negotiation_game(
+            action_type="decision", slot=slot, my_value=my_value, round_=2,
+            last_offer={"price": offer, "from_player":
+                        "player_2" if slot == "player_1" else "player_1"}, **kw))
+
+    def test_a_seller_on_the_top_rung_walks(self):
+        for scale in self.SCALES:
+            action = self._decide(slot="player_1", my_value=150 * scale, offer=140 * scale)
+            assert action["decision"] == "WalkAway", scale
+
+    def test_a_buyer_on_the_bottom_rung_walks(self):
+        for scale in self.SCALES:
+            action = self._decide(slot="player_2", my_value=80 * scale, offer=90 * scale)
+            assert action["decision"] == "WalkAway", scale
+
+    def test_a_seller_anywhere_else_keeps_negotiating(self):
+        # 80, 100 and 120 all have a rung above them, so a buyer who can pay
+        # exists and the game is worth playing.
+        for rung in (80, 100, 120):
+            for scale in self.SCALES:
+                action = self._decide(slot="player_1", my_value=rung * scale, offer=1.0)
+                assert action["decision"] != "WalkAway", (rung, scale)
+
+    def test_a_buyer_anywhere_else_keeps_negotiating(self):
+        for rung in (100, 120, 150):
+            for scale in self.SCALES:
+                action = self._decide(slot="player_2", my_value=rung * scale,
+                                      offer=1000000.0)
+                assert action["decision"] != "WalkAway", (rung, scale)
+
+    def test_a_value_off_the_pool_is_never_walked_on(self):
+        # A value we cannot place is a pool we do not know. Guessing there would
+        # forfeit a live game, so the schedule has to keep it.
+        for odd in (37.0, 95.0, 151.0, 7.5):
+            action = self._decide(slot="player_1", my_value=odd, offer=1.0)
+            assert action["decision"] != "WalkAway", odd
+
+    def test_complete_information_still_compares_the_two_values(self):
+        # Both visible: no inference needed, and the rung rule must not override
+        # a real zone. A seller on the top rung facing a buyer above it trades.
+        action = self._decide(slot="player_1", my_value=120, opponent_value=150, offer=1.0)
+        assert action["decision"] != "WalkAway"
+
+    def test_the_parting_offer_is_priced_outside_the_pool(self):
+        # WalkAway is only offered on a decision turn, so when the proposal is
+        # ours we still name a number. A serious one is wasted -- no price in
+        # the pool pays us -- so name one only a careless opponent signs.
+        seller = play(negotiation_game(slot="player_1", my_value=150, round_=1))
+        assert seller["product_price"] == round(150 * P.untradable_lottery_multiple, 2)
+        buyer = play(negotiation_game(slot="player_2", my_value=80, round_=1))
+        assert buyer["product_price"] == round(80 / P.untradable_lottery_multiple, 2)
+
+    def test_the_parting_offer_still_points_the_right_way(self):
+        # Absurd, but not backwards: a seller must still ask ABOVE their value
+        # and a buyer bid BELOW theirs, or a careless opponent signing it costs
+        # us money instead of winning a lottery.
+        assert play(negotiation_game(slot="player_1", my_value=150))["product_price"] > 150
+        assert play(negotiation_game(slot="player_2", my_value=80))["product_price"] < 80
+
+    def test_a_tradable_seat_still_gets_the_real_schedule(self):
+        # The lottery must not leak into games we can win.
+        priced = play(negotiation_game(slot="player_1", my_value=120))["product_price"]
+        assert priced < 120 * P.untradable_lottery_multiple
+
+
 class TestOffers:
     def test_seller_never_asks_below_its_own_value(self):
         for round_ in range(1, 7):

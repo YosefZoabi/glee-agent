@@ -332,13 +332,35 @@ def near_the_end(state: dict) -> bool:
     return (int(P.open_horizon_cap) - round_number) <= P.endgame_rounds
 
 
+def _untradable_seat(state: dict, slot: str) -> bool:
+    """Our own rung leaves no counterparty, whatever the opponent turns out to hold.
+
+    Valuations sit on four rungs of one shared scale, and shared is checked: in
+    all 5,035 complete-information games on record both sides sit on the same
+    scale, never once crossed. A seller trades only with a buyer valuing the
+    item higher and a buyer only with a seller valuing it lower, so the top rung
+    as seller and the bottom rung as buyer have no counterparty at all.
+
+    This reads only our OWN value, which is why it still works under incomplete
+    information -- where comparing the two valuations sees one of them and gives
+    up. That is 18.1% of our negotiation games.
+    """
+    placed = pool_position(number(state, f"{slot}_value", None))
+    if placed is None:
+        return False                    # off-pool: we do not know the pool, so do not guess
+    index, _scale = placed
+    if _role(state, slot) == "seller":
+        return index == len(RUNG_SHAPE) - 1
+    return index == 0
+
+
 def _no_zone_of_agreement(state: dict, slot: str) -> bool:
-    """True only when both valuations are visible and no price can pay both."""
+    """True when no price exists that pays both sides."""
     seller_value = number(state, "player_1_value", None)
     buyer_value = number(state, "player_2_value", None)
-    if seller_value is None or buyer_value is None:
-        return False
-    return seller_value > buyer_value
+    if seller_value is not None and buyer_value is not None:
+        return seller_value > buyer_value
+    return bool(P.untradable_walk_away) and _untradable_seat(state, slot)
 
 
 def _my_last_price(game: dict, slot: str) -> float | None:
@@ -375,6 +397,20 @@ def _make_offer(game: dict) -> dict:
     state = game["game_state"]
     slot = my_slot(game)
     role = _role(state, slot)
+    if P.untradable_walk_away and _untradable_seat(state, slot):
+        # No price in the pool pays us here, so the schedule is pricing a deal
+        # that cannot exist. `WalkAway` is only available on a decision turn, so
+        # name a number far outside the pool -- worthless to a counterparty
+        # doing the arithmetic, occasionally signed by one who is not -- and walk
+        # on the turn after. Deliberately NOT passed through `_bounded_price`:
+        # that clamps toward a deal, which is the one thing we do not want.
+        my_value = number(state, f"{slot}_value", 0.0) or 0.0
+        mult = max(1.0, float(P.untradable_lottery_multiple))
+        price = my_value * mult if role == "seller" else my_value / mult
+        action = {"product_price": round(price, 2)}
+        if SEND_MESSAGES and messages_allowed(game):
+            action["message"] = _offer_message(role, 0.0)
+        return action
     price = _bounded_price(game, state, slot, role, _target_price(state, slot, role))
     action = {"product_price": price}
     if SEND_MESSAGES and messages_allowed(game):

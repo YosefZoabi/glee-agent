@@ -115,9 +115,30 @@ def counter_share() -> float:
                  else P.realistic_counter_share)
 
 
-def floor_accept_share() -> float:
-    """Where the open-game walk-down stops."""
-    return float(P.settle_early_min_accept if P.settle_early_on else P.min_accept_share)
+def floor_accept_share(state: dict, slot: str) -> float:
+    """Where the open-game walk-down stops.
+
+    Two different games hide behind one number. When our own clock runs, the
+    walk down is a deadlock brake: an offer refused forever pays $0, and every
+    round of refusing costs `1 - delta_me` of whatever we eventually win, so the
+    bar has to come down and reach something a real opponent will sign. When
+    delay is free the brake is buying protection we do not need -- the game
+    still has the round-99 collapse underneath it -- and 0.35 was simply handing
+    back the one game type where holding out costs nothing at all.
+
+    So the floor is raised only on the free clock. Replaying the shipped code
+    over all 1,285 bargaining games of run41+run42 (4,272 of 4,272 logged
+    decisions reproduced exactly), 0.50 refuses 110 offers that 0.35 would have
+    signed -- and 108 of those are delta 1.0, worth +0.0458 of pot each (7.7
+    sigma, no game worse, none ending in no deal). The other two are at delta
+    0.95 and are worth +0.0000 between them, one of them worse. The gain is
+    entirely on the free clock and so is the change.
+    """
+    if P.settle_early_on:
+        return float(P.settle_early_min_accept)
+    if _deltas(state, slot)[0] >= P.costless_delay_delta:
+        return float(P.free_clock_accept_floor)
+    return float(P.min_accept_share)
 
 
 def _continuation_value(state: dict, slot: str) -> float:
@@ -660,7 +681,7 @@ def _make_decision(game: dict) -> dict:
         soft = P.unbounded_soft_horizon
         if P.costless_open_holds_on and _deltas(state, slot)[0] >= P.costless_delay_delta:
             soft = max(1, int(P.open_horizon_cap) - int(P.endgame_rounds))
-        walked = threshold + (money * floor_accept_share() - threshold) * progress(
+        walked = threshold + (money * floor_accept_share(state, slot) - threshold) * progress(
             state, soft
         )
         threshold = min(threshold, walked)

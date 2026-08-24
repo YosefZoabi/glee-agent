@@ -661,6 +661,56 @@ class PersuasionParams:
     # round.
     explore_rounds: int = 2
     explore_tolerance: float = 0.85
+    # Take every recommendation in the cells where the prior sits ON the bar,
+    # instead of buying two rounds and letting them decide the other eighteen.
+    #
+    # `explore_tolerance` already names this set exactly: p*v is at or under the
+    # price (so the branch above did not fire) but within 15% of it. Four cells:
+    # (1/3,3.0), (0.5,2.0), (0.8,1.2), (0.8,1.25), all with p*m between 0.96 and
+    # 1.00. They are the worst cells we play. Realised percentile today, from
+    # the per-game rating_delta:
+    #
+    #     cell            now    median    optimal   P(finish -)
+    #     (1/3, 3.00)    0.405    0.266      0.599       18%
+    #     (0.5, 2.00)    0.462    0.344      0.598       17%
+    #     (0.8, 1.20)    0.484    0.302      0.613       12%
+    #     (0.8, 1.25)    0.496    0.524      0.604       24%
+    #
+    # Half our (1/3,3.00) games finish in the bottom quarter. The cause is
+    # structural: the belief moves only on rounds we BUY, so one unlucky draw in
+    # the two explore rounds shuts the game, and shutting it stops the evidence
+    # that could reopen it.
+    #
+    # Pressing is right because a recommendation here is a FAVOURABLE bet, not a
+    # break-even one. Blind buying is break-even by construction (p*m ~ 1), but
+    # we are not buying blind -- conditional on the seller recommending, the hit
+    # rate q beats p, and the expected value per purchase is positive in all
+    # four:
+    #
+    #     cell           q     good pays   bad costs   EV per buy
+    #     (1/3, 3.00)  0.559     +2.00x      -1.00x      +0.677x
+    #     (0.5, 2.00)  0.714     +1.00x      -1.00x      +0.428x
+    #     (0.8, 1.20)  0.909     +0.20x      -1.00x      +0.091x
+    #     (0.8, 1.25)  0.901     +0.25x      -1.00x      +0.126x
+    #
+    # So there is no argument for stopping at break-even: every further round is
+    # a bet we are favoured on, in a game where more money is a better rank.
+    # Stopping when clear was measured and loses -- 0.403 against 0.600 in
+    # (1/3,3.00), 0.390 against 0.597 in (0.5,2.00).
+    #
+    # Deliberately NOT extended below `explore_tolerance`. In the five frozen
+    # cells the same reasoning fails: 43-65% of the field banks exactly zero
+    # there, so a zero already scores 0.44-0.49 and is close to Elo-neutral,
+    # while q sits under the bar. Four of those five are a pass; the fifth,
+    # (1/3,2.00), is `rationing_belief`'s.
+    press_recommendations: bool = False
+    # ...but stop once far enough ahead, where a purchase is thin and the
+    # percentile curve has flattened. Only bites at m < `press_cap_below_m`: a
+    # good buy pays just 0.2-0.25x there, so past 5x banked the variance is no
+    # longer bought with anything. Swept over thresholds 0/1/2/3/5/8/none, 5x
+    # was best at m=1.2 and 1.25 and "none" best at m>=2.
+    press_profit_cap: float = 5.0
+    press_cap_below_m: float = 1.5
     # Read the seller's rationing when no purchase has been made to read
     # instead. `_buyer_credibility` only updates on rounds we BUY, so in a cell
     # whose prior starts under the buyer's bar it never updates: we decline,

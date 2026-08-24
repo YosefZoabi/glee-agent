@@ -406,6 +406,77 @@ class TestRegimeAndNonBuyer:
         assert buyer_ignores_us(game) is False
 
 
+class TestPressingAFavourableRecommendation:
+    """The four cells where the prior sits ON the buyer's bar.
+
+    `explore_tolerance` names them exactly: p*v is at or under the price but
+    within 15% of it, which is (1/3,3.0), (0.5,2.0), (0.8,1.2) and (0.8,1.25).
+    Today we buy two rounds and let those two draws decide the other eighteen,
+    and half our (1/3,3.00) games finish in the bottom quarter as a result.
+
+    Pressing is right because these are favourable bets once the seller has
+    recommended -- q beats p, so EV per purchase is +0.09x to +0.68x. Stopping
+    at break-even was measured and loses.
+    """
+
+    def _probe(self, *, p=0.5, m=2.0, price=100.0, round_=8, banked=0.0):
+        game = persuasion_game(
+            slot="player_2", p=p, v=m * price, u=0.0, price=price,
+            round_=round_, total_rounds=20, seller_message="yes",
+            history=[persuasion_round(round_=r, message="yes", bought=False)
+                     for r in range(1, round_)],
+        )
+        game["game_state"]["buyer_total_payoff"] = banked
+        return game
+
+    def test_the_flag_ships_off(self):
+        from glee_agent import params
+        assert params.PERSUASION.press_recommendations is False
+        assert params.PERSUASION.press_profit_cap == 5.0
+
+    def test_today_we_quit_after_the_probe_rounds(self):
+        # The defect: past the explore window the belief is still the bare prior,
+        # which does not clear the bar, so we refuse for the rest of the game.
+        assert play(self._probe())["decision"] == "no"
+
+    def test_the_arm_takes_every_recommendation(self, press_recommendations):
+        for p, m in ((1 / 3, 3.0), (0.5, 2.0), (0.8, 1.2), (0.8, 1.25)):
+            for round_ in (3, 8, 15, 20):
+                game = self._probe(p=p, m=m, round_=round_)
+                assert play(game)["decision"] == "yes", (p, m, round_)
+
+    def test_the_arm_still_refuses_a_negative_signal(self, press_recommendations):
+        # Pressing is about which recommendations to take, never about ignoring
+        # a seller who is telling us to stay out.
+        game = self._probe()
+        game["game_state"]["seller_message"] = "no"
+        assert play(game)["decision"] == "no"
+
+    def test_the_arm_stops_once_well_ahead_where_a_win_is_thin(self, press_recommendations):
+        # At m=1.2 a good buy pays 0.2x and a bad one costs 1.0x, so past 5x
+        # banked the percentile curve is flat and the variance buys nothing.
+        assert play(self._probe(p=0.8, m=1.2, banked=499.0))["decision"] == "yes"
+        assert play(self._probe(p=0.8, m=1.2, banked=501.0))["decision"] == "no"
+
+    def test_the_cap_does_not_apply_where_a_win_is_large(self, press_recommendations):
+        # At m>=2 every purchase is still clearly favourable, so there is no
+        # level of winnings at which stopping beats playing on.
+        for p, m in ((1 / 3, 3.0), (0.5, 2.0)):
+            assert play(self._probe(p=p, m=m, banked=50000.0))["decision"] == "yes"
+
+    def test_the_arm_leaves_the_frozen_cells_alone(self, press_recommendations):
+        # Below `explore_tolerance` the reasoning fails -- q sits under the bar
+        # and a zero there is already close to Elo-neutral. Those cells belong
+        # to `rationing_belief`, not to this.
+        for p, m in ((1 / 3, 1.2), (1 / 3, 1.25), (1 / 3, 2.0), (0.5, 1.2), (0.5, 1.25)):
+            assert play(self._probe(p=p, m=m))["decision"] == "no", (p, m)
+
+    def test_the_arm_does_not_disturb_the_buy_everything_cells(self, press_recommendations):
+        # Those return on the prior alone, before this branch is reached.
+        for p, m in ((1 / 3, 4.0), (0.5, 3.0), (0.8, 2.0), (0.8, 4.0)):
+            assert play(self._probe(p=p, m=m, banked=50000.0))["decision"] == "yes", (p, m)
+
+
 class TestTheRationingBelief:
     """Reading the seller's rationing when there is nothing bought to read.
 

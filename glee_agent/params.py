@@ -445,6 +445,39 @@ class NegotiationParams:
     # anything under this fraction of it while road remains. 0.0 disables.
     known_zone_floor: float = 0.0
 
+    # --- seats with no counterparty ---------------------------------------
+    # Valuations sit on four rungs -- 80, 100, 120, 150 -- of ONE shared scale.
+    # Shared is checked, not assumed: over all 5,035 complete-information games
+    # on record both sides are on the same scale every single time, never once
+    # crossed. A seller trades only with a buyer above them and a buyer only
+    # with a seller below them, so a seller holding the TOP rung and a buyer
+    # holding the BOTTOM rung have no counterparty that exists. That is
+    # arithmetic on our own visible value and needs nothing about theirs, which
+    # is why it survives incomplete information -- where `_no_zone_of_agreement`
+    # compared two valuations, saw only one, and gave up.
+    #
+    # It has therefore never fired. Across 18,210 negotiation games we have sent
+    # RejectOffer 83,688 times, AcceptOffer 2,410 times and WalkAway zero times,
+    # while grinding these seats out to the round cap:
+    #
+    #   seat                    games  agreements  mean payoff  turns each
+    #   seller on the top rung   1,676     16 (1.0%)   +0.0019      25.8
+    #   buyer on the bottom rung 1,611      4 (0.2%)   +0.0003      26.3
+    #
+    # 3,287 games, 18.1% of all negotiation, 85,705 turns, for a payoff that
+    # rounds to zero. None of them ever went NEGATIVE, so this is not about
+    # avoiding losses -- walking pays the same zero that grinding pays. It is
+    # about the 82,000 turns, because a game that ends on round 1 releases its
+    # concurrency slot for a game we can actually win.
+    untradable_walk_away: bool = True
+    # `WalkAway` is only offered on a decision turn, so when the proposal is
+    # ours we still have to name a number. Name one far outside the pool: no
+    # price in it can pay us, so a serious offer is strictly wasted, while an
+    # absurd one still gets signed occasionally by an opponent not checking. It
+    # is a free lottery ticket on the way out -- exactly the 20 agreements above,
+    # one of which paid 0.90 of our own value.
+    untradable_lottery_multiple: float = 1.9
+
     # Identical prices in a row before we read the opponent as done negotiating
     # and take what is on the table. Replayed over every negotiation game we
     # have: at 6 it rescues the one open-ended game we ground to a 0-0 at the

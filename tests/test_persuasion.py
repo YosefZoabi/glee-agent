@@ -406,6 +406,94 @@ class TestRegimeAndNonBuyer:
         assert buyer_ignores_us(game) is False
 
 
+class TestTheRationingBelief:
+    """Reading the seller's rationing when there is nothing bought to read.
+
+    `_buyer_credibility` only moves on rounds we BUY, so in a cell whose prior
+    starts under the buyer's bar it never moves: we refuse, learn nothing, and
+    refuse for the rest of the game. Five of fifteen cells sit there and bank
+    exactly zero, while the field's buyers clear zero in all five.
+    """
+
+    def _game(self, *, p=1 / 3, m=2.0, rate=0.3, seen=10, round_=11, price=100.0):
+        """A game where the seller has praised `rate` of `seen` rounds so far."""
+        praised = round(rate * seen)
+        history = [persuasion_round(round_=r + 1, message="yes" if r < praised else "no",
+                                    bought=False)
+                   for r in range(seen)]
+        return persuasion_game(
+            slot="player_2", p=p, v=m * price, u=0.0, price=price,
+            round_=round_, total_rounds=20, seller_message="yes", history=history,
+        )
+
+    def test_the_flag_ships_off(self):
+        from glee_agent import params
+        assert params.PERSUASION.rationing_belief is False
+        assert params.PERSUASION.rationing_margin == 0.15
+        assert params.PERSUASION.rationing_cap == 0.95
+
+    def test_the_shipped_buyer_is_frozen_here(self):
+        # The defect, stated as a test: a seller who has declined to praise 70%
+        # of rounds is telling us something, and we refuse anyway.
+        assert play(self._game())["decision"] == "no"
+
+    def test_the_arm_buys_from_a_seller_who_rations(self, rationing_belief):
+        assert play(self._game())["decision"] == "yes"
+
+    def test_the_arm_still_refuses_a_seller_who_praises_everything(self, rationing_belief):
+        # rate = 1 collapses p/rate back to the bare prior: they told us nothing,
+        # so we behave exactly as before. The estimator has to degrade this way
+        # or it is just an excuse to buy.
+        assert play(self._game(rate=1.0))["decision"] == "no"
+
+    def test_the_arm_refuses_a_seller_who_rations_only_a_little(self, rationing_belief):
+        # Rationing 40% of rounds is not enough to clear the bar plus the margin
+        # at these values. The margin is load-bearing, not decoration.
+        assert play(self._game(rate=0.6))["decision"] == "no"
+
+    def test_the_arm_needs_evidence_before_it_trusts_the_rate(self, rationing_belief):
+        # One observed round is not a rationing policy. The shrinkage toward the
+        # prior has to keep us out until the rate means something.
+        assert play(self._game(seen=1, round_=3))["decision"] == "no"
+
+    def test_the_arm_cannot_enter_the_cells_the_ceiling_rules_out(self, rationing_belief):
+        # Pooled over these cells p/P(rec) is below the buyer's bar, so on
+        # average no recommendation in them is worth taking however honest the
+        # seller is -- h <= 1 by definition. `rationing_cap` and the margin put
+        # the required belief above 0.95 here, which is unreachable by
+        # construction, so no amount of apparent rationing gets us in.
+        for p, m in ((1 / 3, 1.20), (0.5, 1.20)):
+            for rate in (0.05, 0.1, 0.2, 0.3):
+                game = self._game(p=p, m=m, rate=rate, seen=50, round_=51)
+                assert play(game)["decision"] == "no", (p, m, rate)
+
+    def test_the_arm_only_ever_converts_a_refusal_into_a_purchase(self, rationing_belief):
+        # Additive by construction, which is what makes the counterfactual a
+        # count rather than a forecast. Anything else and the A/B cannot be read.
+        import dataclasses
+        from glee_agent import params
+        from glee_agent.strategies import persuasion
+        off = dataclasses.replace(params.PERSUASION, rationing_belief=False)
+        for p in (1 / 3, 0.5, 0.8):
+            for m in (1.2, 1.25, 2.0, 3.0, 4.0):
+                for rate in (0.1, 0.3, 0.5, 0.7, 0.9, 1.0):
+                    for seen in (1, 3, 10, 19):
+                        game = self._game(p=p, m=m, rate=rate, seen=seen, round_=seen + 1)
+                        on = play(game)["decision"]
+                        with pytest.MonkeyPatch.context() as mp:
+                            mp.setattr(persuasion, "P", off)
+                            base = play(game)["decision"]
+                        if base == "yes":
+                            assert on == "yes", (p, m, rate, seen)
+
+    def test_the_belief_never_exceeds_the_cap(self):
+        # p/rate saturates at certainty and is optimistic by 0.03-0.08 when it
+        # does; a seller rationing hard early must not pin us at sure-thing.
+        for rate in (0.01, 0.05, 0.1):
+            game = self._game(rate=rate, seen=50, round_=51)
+            assert signal_posterior(game, 1 / 3) <= P.rationing_cap + 1e-9
+
+
 class TestTheBareRecommendationArm:
     """The channel split: persuasion can go bare without silencing the others.
 

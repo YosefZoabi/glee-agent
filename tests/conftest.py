@@ -50,6 +50,16 @@ def messages_on(monkeypatch):
 
 
 @pytest.fixture
+def rationing_belief(monkeypatch):
+    """Let the buyer read a seller's rationing when it has bought nothing."""
+    import dataclasses
+    from glee_agent import params
+    from glee_agent.strategies import persuasion
+    monkeypatch.setattr(persuasion, "P",
+                        dataclasses.replace(params.PERSUASION, rationing_belief=True))
+
+
+@pytest.fixture
 def bare_recommendation(monkeypatch):
     """Persuasion alone goes bare, while bargaining and negotiation keep prose.
 

@@ -256,19 +256,27 @@ class TestUndiscountedGamesDoNotDeadlock:
         assert play(self._standing_offer(share))["decision"] == "accept"
 
     def test_a_marginal_offer_is_not_taken_instantly_but_does_get_taken(self):
-        # 40% is under the 45% bar a perfectly patient player holds, so it waits
-        # -- and is worth signing rather than spending another 90 rounds proving
-        # a point, which is what the walk-down guarantees.
+        # 40% is under the bar a perfectly patient player holds, so it waits --
+        # and it does still get taken, at the round-97 collapse rather than
+        # inside a dozen rounds. `free_clock_accept_floor` deliberately stopped
+        # walking the bar down early here: at delta 1.0 the offer is worth
+        # exactly as much on round 97 as on round 1, so the rounds spent are
+        # free and the chance they improve their offer is not.
         assert play(self._standing_offer(0.40, round_=1))["decision"] == "reject"
-        assert play(self._standing_offer(0.40, round_=12))["decision"] == "accept"
+        assert play(self._standing_offer(0.40, round_=12))["decision"] == "reject"
+        assert play(self._standing_offer(0.40, round_=97))["decision"] == "accept"
 
     def test_open_ended_games_always_close_eventually(self):
-        # The failure mode was unbounded rejection, so assert termination.
+        # The failure mode was unbounded rejection, so assert termination -- and
+        # termination is the whole of the claim. Which round it lands on is a
+        # pricing question, and on a free clock the answer is "the last one that
+        # is still free", because the server pays both sides $0 only at 99.
         for share in (0.40, 0.46, 0.55):
             decisions = [
-                play(self._standing_offer(share, round_=r))["decision"] for r in range(1, 25)
+                play(self._standing_offer(share, round_=r))["decision"]
+                for r in list(range(1, 25)) + [96, 97, 98]
             ]
-            assert "accept" in decisions, f"never accepted {share:.0%} in 24 rounds"
+            assert "accept" in decisions, f"never accepted {share:.0%} before the cap"
 
     def test_a_genuine_lowball_is_still_refused_early(self):
         assert play(self._standing_offer(0.05, round_=1))["decision"] == "reject"
@@ -724,12 +732,17 @@ class TestTheOpenEndedWalkOnlyEverGoesDown:
         for round_ in (1, 5, 15, 40, 69):
             assert play(self._standing(0.25, round_))["decision"] == "accept", round_
 
-    def test_a_patient_player_still_walks_its_high_bar_down(self):
-        # The walk-down itself is not gone: at delta 1.0 the bar starts above
-        # `min_accept_share`, and holding it forever is what pays $0.
-        early = play(self._standing(0.36, 1, delta=1.0))["decision"]
-        late = play(self._standing(0.36, 40, delta=1.0))["decision"]
-        assert (early, late) == ("reject", "accept")
+    def test_a_patient_player_holds_one_bar_and_never_raises_it(self):
+        # On a free clock the bar no longer walks at all: it sits at
+        # `free_clock_accept_floor` until the round-97 collapse. That is the
+        # same invariant this class is named for -- never harder to accept as
+        # the game goes on -- with the walk flattened rather than reversed,
+        # because at delta 1.0 waiting costs nothing so there is nothing to
+        # concede to.
+        for round_ in (1, 5, 15, 40, 69):
+            assert play(self._standing(0.50, round_, delta=1.0))["decision"] == "accept", round_
+            assert play(self._standing(0.49, round_, delta=1.0))["decision"] == "reject", round_
+        assert play(self._standing(0.49, 97, delta=1.0))["decision"] == "accept"
 
     def test_a_real_lowball_is_still_refused_however_long_it_stands(self):
         assert play(self._standing(0.05, 60))["decision"] == "reject"
@@ -775,8 +788,12 @@ class TestWaitingIsFreeSoWaitLonger:
         assert play(self._offer(0.48, max_rounds=12))["decision"] == "accept"
 
     def test_the_walk_down_still_breaks_a_deadlock(self):
-        # The floor must not become the round-99 stalemate it replaced.
-        assert play(self._offer(0.48, round_=20))["decision"] == "accept"
+        # The floor must not become the round-99 stalemate it replaced. It does
+        # not: the collapse at the real cap still fires, two rounds before the
+        # server books the double zero. What changed is only when -- and on a
+        # free clock the offer has not lost a cent in the meantime.
+        assert play(self._offer(0.48, round_=20))["decision"] == "reject"
+        assert play(self._offer(0.48, round_=97))["decision"] == "accept"
 
     def test_it_is_a_floor_and_never_a_ceiling(self):
         from glee_agent.strategies.bargaining import costless_hold_value
@@ -1205,7 +1222,7 @@ class TestARejectionIsChargedWhatItCosts:
         from glee_agent.strategies import bargaining as B
         assert B.settle_rounds() == 9
         assert B.counter_share() == 0.25
-        assert B.floor_accept_share() == 0.50
+        assert B.floor_accept_share(self._state(0.95, 0.90, None), "player_1") == 0.50
 
     def test_the_shipped_bar_sits_far_above_the_break_even(self):
         # 0.95 vs 0.90, open, complete: the record says refusing 0.20+ loses.
@@ -1280,7 +1297,7 @@ class TestAFreeClockIsNotADeadline:
             assert play(self._game(rd))["decision"] == "reject", rd
 
     def test_the_arm_still_relaxes_as_the_real_cap_approaches(self, hold_open):
-        assert play(self._game(60))["decision"] == "accept"
+        assert play(self._game(97))["decision"] == "accept"
 
     def test_and_takes_anything_at_the_cap_rather_than_book_a_zero(self, hold_open):
         assert play(self._game(98, offer=0.12))["decision"] == "accept"

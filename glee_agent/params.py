@@ -33,6 +33,14 @@ class BargainingParams:
     # what the field will actually sign.
     never_concede_below: float = 0.45
     min_accept_share: float = 0.35
+    # ...and the same floor for an open game where delay costs us nothing. See
+    # `floor_accept_share`: the walk down exists to stop a deadlock, but a
+    # player who pays nothing to wait is not in one, and 0.35 was conceding the
+    # only game type where refusing is genuinely free. 0.50 is the whole of what
+    # is there -- 0.60 and 0.70 recover the same 4.95 pot-units in total, as do
+    # accept_slack 1.05/1.10 and rounds_to_settle 1/2, so nothing further is
+    # bought by reaching higher.
+    free_clock_accept_floor: float = 0.50
     # The ceiling half of the same clamp. The equilibrium share hits 1.0 whenever
     # our own delta is 1.0, whatever the opponent's is -- theory says a player who
     # pays nothing for delay can hold out for everything. No opponent signs that,

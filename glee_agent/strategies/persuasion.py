@@ -537,6 +537,21 @@ def _buyer_decision(game: dict) -> dict:
     if p * v + (1.0 - p) * u > price:
         return {"decision": "yes"}
 
+    if P.press_recommendations and price > 0 and             p * v + (1.0 - p) * u >= price * P.explore_tolerance:
+        # The prior sits ON the bar, so blind buying is break-even -- but this
+        # is not blind. The seller recommended, and conditional on that the hit
+        # rate beats the prior, which makes every one of these a favourable bet.
+        # Take them all rather than buying two and letting those decide the
+        # rest, which is what leaves half our (1/3,3.00) games in the bottom
+        # quarter.
+        if v < price * P.press_cap_below_m:
+            # Where a good buy pays only 0.2-0.25x, stop once well ahead: the
+            # percentile curve is flat up there and the variance buys nothing.
+            banked = number(state, "buyer_total_payoff", 0.0) or 0.0
+            if banked >= P.press_profit_cap * price:
+                return {"decision": "no"}
+        return {"decision": "yes"}
+
     belief = _buyer_credibility(game, p)
     expected = belief * v + (1.0 - belief) * u
 

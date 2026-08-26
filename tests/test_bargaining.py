@@ -1403,8 +1403,16 @@ class TestTheOpeningAskGrid:
 
     def test_the_arm_ships_off(self):
         assert P.opening_ask_grid is False
-        assert P.opening_grid[-1] == -1.0
         assert P.opening_grid_known_horizon_only is True
+
+    def test_the_grid_no_longer_carries_a_control(self):
+        # run49 settled the shipped opening at 9.2 sigma against 0.52, and it
+        # was costing -3.144 rating a game to keep sampling it. Every remaining
+        # entry is at least as good as the best thing measured, so the live
+        # question is now the internal one: is below 0.52 better still?
+        assert all(x > 0 for x in P.opening_grid), P.opening_grid
+        assert 0.52 in P.opening_grid, "0.52 must stay so its games pool"
+        assert min(P.opening_grid) < 0.52, "the curve has not turned; sample lower"
 
     def test_the_shipped_opening_is_the_one_nobody_signs(self):
         # Not a preference: the number itself. 0.78+ on the known horizon.
@@ -1427,9 +1435,8 @@ class TestTheOpeningAskGrid:
             g = self._open(max_rounds=12, delta_1=0.95, delta_2=0.8)
             g["game_id"] = "grid-%d" % i
             got = round(self._share(g), 3)
-            # Either a grid entry, or the -1.0 sentinel leaving the shipped
-            # opening untouched -- which in this cell is 0.78 or above.
-            assert got in allowed or got >= 0.78, got
+            # Every entry is now a real share -- there is no sentinel left.
+            assert got in allowed, got
 
     def test_the_draw_is_stable_for_a_game(self, opening_ask_grid):
         # Seeded from the game id, so replaying a log reproduces the opening.

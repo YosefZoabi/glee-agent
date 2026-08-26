@@ -70,6 +70,20 @@ def rationing_belief(monkeypatch):
 
 
 @pytest.fixture
+def rationing_break_even(monkeypatch):
+    """Take a recommendation on the bare break-even line, no shrinkage, no margin.
+
+    `rationing_belief` is already on in the shipped params; this arm only adds
+    the cells its shrunk estimate structurally cannot reach.
+    """
+    import dataclasses
+    from glee_agent import params
+    from glee_agent.strategies import persuasion
+    monkeypatch.setattr(persuasion, "P",
+                        dataclasses.replace(params.PERSUASION, rationing_break_even=True))
+
+
+@pytest.fixture
 def bare_recommendation(monkeypatch):
     """Persuasion alone goes bare, while bargaining and negotiation keep prose.
 

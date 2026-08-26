@@ -479,6 +479,51 @@ def signal_posterior(game: dict, p: float) -> float:
     return clamp(p + (raw - p) * (seen / (seen + P.rate_prior_weight)), 0.0, 1.0)
 
 
+def shrunk_ceiling(game: dict, p: float) -> float:
+    """The most `signal_posterior` could return on this round, at any rationing.
+
+    It shrinks p/rate toward `p` by seen/(seen + `rate_prior_weight`) and caps
+    the raw ratio at `rationing_cap`, so however hard the seller rations, this
+    is the ceiling. Comparing it to the bar says whether that estimator has any
+    chance in this cell -- which is what decides where the break-even line is
+    allowed to take over.
+    """
+    seen = len(history(game))
+    return clamp(p + (P.rationing_cap - p) * (seen / (seen + P.rate_prior_weight)),
+                 0.0, 1.0)
+
+
+def certified_posterior(game: dict, p: float) -> float | None:
+    """P(high | recommended) on the bare ceiling, with no shrinkage toward `p`.
+
+    `signal_posterior` is the right estimator where the bar is loose. Where it
+    is tight it cannot move: the seen/(seen + `rate_prior_weight`) shrinkage and
+    `rationing_cap` together hold it under 0.894 at twenty rounds, and the four
+    m <= 1.25 frozen cells need 0.920-0.958 once `rationing_margin` is added. So
+    the arm that was supposed to cover those cells bought 0.000 rounds in all
+    566 run47 games there, in ARM and control alike.
+
+    This drops both. `p / rate` is a ceiling, so it is corrected by `h`, the
+    share of HIGH units the field actually praises -- 1.015 (sd 0.039) over the
+    ten cells where the buyer takes every recommendation and the sample is
+    therefore unselected. That is the correction the ceiling needs; pulling the
+    whole estimate back toward a prior the seller's rationing has already
+    refuted is not.
+
+    See `rationing_break_even` in params for the ground-truth pricing: 0.955
+    realised against a 0.825 bar over 88 human buys, 5.9 sigma, clearing in all
+    four cells separately.
+
+    Returns None when there is not yet enough watching to read a rate.
+    """
+    if len(history(game)) < P.rationing_min_rounds:
+        return None
+    rate = recommendation_rate(game)
+    if rate is None or rate <= 0.0:
+        return None
+    return clamp(P.rationing_h * p / rate, 0.0, 1.0)
+
+
 def _buyer_credibility(game: dict, p: float) -> float:
     """Posterior probability that a recommended product is high quality.
 
@@ -570,6 +615,20 @@ def _buyer_decision(game: dict) -> dict:
         lifted = signal_posterior(game, p)
         if lifted * v + (1.0 - lifted) * u > price * (1.0 + P.rationing_margin):
             return {"decision": "yes"}
+        # Cells where that shrunk estimate cannot reach the bar however hard the
+        # seller rations. Only ever consulted on a round the seller recommended.
+        if P.rationing_break_even and _is_positive(state.get("seller_message")):
+            # Only where the shrunk estimator is arithmetically incapable of
+            # clearing the bar. Without this the break-even line also fires in
+            # (1/3,2.00) -- 952 rounds of the replay -- which is the cell
+            # `rationing_belief` already wins at 7.1 sigma, and where the same
+            # ground truth has this rule coming in at 0.453 against a 0.500 bar.
+            # Stated as arithmetic rather than a cell list so it cannot drift.
+            ceiling = shrunk_ceiling(game, p)
+            if ceiling * v + (1.0 - ceiling) * u <= price * (1.0 + P.rationing_margin):
+                certified = certified_posterior(game, p)
+                if certified is not None and certified * v + (1.0 - certified) * u > price:
+                    return {"decision": "yes"}
     return {"decision": "no"}
 
 

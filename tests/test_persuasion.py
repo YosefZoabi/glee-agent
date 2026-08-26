@@ -1081,6 +1081,30 @@ class TestTheBreakEvenRationingLine:
         assert play(self._game(rate=0.0, seen=2, round_=3))["decision"] == "no"
         assert play(self._game(rate=0.5, seen=2, round_=3))["decision"] == "no"
 
+    def test_it_stops_once_a_low_m_game_is_ahead(self, rationing_break_even):
+        # At m=1.20 one low draw undoes five highs, and a game that ends
+        # negative ranks near the floor of a field whose mass is at zero.
+        game = self._game(p=1 / 3, m=1.2, rate=0.25, price=100.0)
+        assert play(game)["decision"] == "yes"
+        game["game_state"]["buyer_total_payoff"] = 20.0      # +0.20x banked
+        assert play(game)["decision"] == "no"
+
+    def test_the_stop_is_not_applied_where_a_lead_is_robust(self, rationing_break_even):
+        # At m >= 1.5 a low costs at most two highs, and stopping there was
+        # measured and lost -- 0.403 against 0.600 at (1/3,3.00).
+        from glee_agent import params
+        assert params.PERSUASION.break_even_cap_below_m == 1.5
+        game = self._game(p=1 / 3, m=2.0, rate=0.3, price=100.0)
+        game["game_state"]["buyer_total_payoff"] = 500.0
+        # (1/3,2.00) is `rationing_belief`'s cell and the arm must not touch it.
+        assert play(game)["decision"] == "yes"
+
+    def test_the_stop_does_not_fire_before_we_are_ahead(self, rationing_break_even):
+        for banked in (-500.0, -100.0, 0.0, 19.0):
+            game = self._game(p=1 / 3, m=1.2, rate=0.25, price=100.0)
+            game["game_state"]["buyer_total_payoff"] = banked
+            assert play(game)["decision"] == "yes", banked
+
     def test_the_arm_leaves_the_other_cells_alone(self, rationing_break_even):
         # It is strictly additive: it can only turn a refusal into a purchase,
         # and it is only consulted after `rationing_belief` has already declined.

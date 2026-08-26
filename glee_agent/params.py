@@ -81,9 +81,25 @@ class BargainingParams:
     # field actually signs, which is what the floor should have been derived
     # from in the first place.
     opening_ask_grid: bool = False
-    # Shares of the pot to sample. The last is the shipped behaviour, left as a
-    # sentinel so the control lives inside the same agents and the same window.
-    opening_grid: tuple[float, ...] = (0.52, 0.60, 0.68, 0.76, -1.0)
+    # Shares of the pot to sample.
+    #
+    # run49 ran (0.52, 0.60, 0.68, 0.76, sentinel) over 1,333 known-horizon
+    # openings and scored them on rating_delta directly:
+    #
+    #   0.52    n=281   +0.181 rating/game   vs control +3.325   t=+9.2
+    #   0.60    n=262   -0.777                          +2.366   t=+6.0
+    #   0.68    n=274   -2.095                          +1.049   t=+2.9
+    #   0.76    n=317   -2.738                          +0.406   t=+1.3
+    #   control n=199   -3.144   <- the shipped opening, bleeding 3.1 a game
+    #
+    # Monotone, and the gradient at 0.52 is still steep, so the curve has not
+    # turned. Three changes follow. 0.68 and 0.76 are dropped: they sample the
+    # same grind-it-out regime the control already covers. The CONTROL is
+    # dropped too -- it is settled at 9.2 sigma and it is the most expensive arm
+    # on the board, so run49's 199 games stand as the baseline and the live
+    # question becomes the internal one, whether below 0.52 is better still.
+    # 0.52 stays exactly where it was so its 281 games pool across the window.
+    opening_grid: tuple[float, ...] = (0.40, 0.46, 0.52)
     # Only where the shipped opening is currently refused. On the open horizon
     # it already clears 45% of the time and banks 0.465; there is nothing to
     # find there and a grid would only put that at risk.

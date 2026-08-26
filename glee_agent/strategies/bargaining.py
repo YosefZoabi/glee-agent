@@ -36,6 +36,8 @@ rounds, so it can only ever match the worst outcome available to us.
 
 from __future__ import annotations
 
+import hashlib
+
 from ..gamestate import (
     OPPOSITE,
     clamp,
@@ -458,6 +460,17 @@ def stonewall_threshold(state: dict, slot: str) -> float:
     return clamp(p * demand * delta_me / denominator, 0.0, 1.0)
 
 
+def _grid_pick(game: dict, options: tuple) -> float:
+    """Deterministically choose a grid entry from the game id.
+
+    Seeded rather than random so a replay of the turn logs reproduces the same
+    opening, which is what lets the run be scored round by round afterwards.
+    """
+    seed = str(game.get("game_id") or (game.get("game_state") or {}).get("game_id") or "")
+    digest = hashlib.sha256(("open|" + seed).encode()).digest()
+    return options[int.from_bytes(digest[:8], "big") % len(options)]
+
+
 def _make_offer(game: dict) -> dict:
     state = game["game_state"]
     slot = my_slot(game)
@@ -548,6 +561,16 @@ def _make_offer(game: dict) -> dict:
         counter = sweep_counter_demand(game, slot)
         if counter is not None:
             demand = min(demand, counter)
+    # The opening grid. Round 1 only, as proposer, and only on the known
+    # horizon where the shipped opening is currently signed 1.8% of the time.
+    # A sentinel of -1.0 leaves the computed demand alone, so the control sits
+    # inside the same agents and the same window as the treated draws.
+    if P.opening_ask_grid and int(number(state, "round", 1) or 1) == 1             and state.get("proposer") == slot             and (rounds_left(state, 0) is not None
+                 or not P.opening_grid_known_horizon_only):
+        pick = _grid_pick(game, tuple(P.opening_grid))
+        if pick >= 0.0:
+            demand = float(pick)
+
     demand = clamp(demand, 0.0, 1.0 - P.min_opponent_share)
 
     mine, theirs = split_exactly(money, demand)

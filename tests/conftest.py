@@ -70,6 +70,16 @@ def rationing_belief(monkeypatch):
 
 
 @pytest.fixture
+def opening_ask_grid(monkeypatch):
+    """Sample the round-1 opening from a grid instead of computing one number."""
+    import dataclasses
+    from glee_agent import params
+    from glee_agent.strategies import bargaining
+    monkeypatch.setattr(bargaining, "P",
+                        dataclasses.replace(params.BARGAINING, opening_ask_grid=True))
+
+
+@pytest.fixture
 def rationing_break_even(monkeypatch):
     """Take a recommendation on the bare break-even line, no shrinkage, no margin.
 

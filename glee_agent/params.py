@@ -907,6 +907,37 @@ class PersuasionParams:
     # Rounds of watching before the rate is worth anything. Below this the rate
     # is one or two observations and p/rate is noise.
     rationing_min_rounds: int = 5
+    # ...and stop once a low-m game is ahead. Where the multiplier is small a
+    # lead is FRAGILE: at m=1.20 a high pays +0.20x and a low costs -1.00x, so
+    # one bad draw wipes out five good ones. Riding that out is not patience,
+    # it is handing back a rank we already hold.
+    #
+    # This was measured before and REFUTED -- in the probe cells. Stopping when
+    # clear lost 0.403 against 0.600 at (1/3,3.00) and 0.390 against 0.597 at
+    # (0.5,2.00). At m=3 a low costs half a high, so a lead there IS robust and
+    # the refutation stands. Generalising it to m=1.2 was the error.
+    #
+    # Replayed over 89 real games with two or more purchases in these four cells
+    # -- 40 from this arm's own live play, 49 human -- and scored in percentile
+    # against the field's payoff distribution for the cell:
+    #
+    #   never stop     mean bank -0.478   pct 0.3802   51.7% positive   24.7% at or under -1x
+    #   stop at +0.6x            -0.347       0.4547   66.3%            20.2%
+    #   stop at +0.4x            -0.308       0.4864   76.4%            15.7%
+    #   stop at +0.2x            -0.237       0.5131   91.0%             7.9%
+    #
+    # +0.133 percentile, monotone in the cap, and positive in all four cells
+    # separately. The mean payoff stays negative and that is the point: the
+    # field's mass in these cells sits at exactly zero with a long negative
+    # tail, so a game ending at -1x ranks about 0.02. Avoiding the tail is worth
+    # far more than the mean says, which is why payoff was the wrong yardstick.
+    #
+    # 0.2 is the measured peak but the curve is flat from 0.2 to 0.4; at m=1.20
+    # it means "stop once one good purchase has put us ahead".
+    break_even_profit_cap: float = 0.2
+    # Only where a lead is fragile. Above this multiplier the earlier refutation
+    # applies and we ride it out.
+    break_even_cap_below_m: float = 1.5
     # A seller who signals "no" gives up their own revenue, so the signal is
     # credible; only override it if it has proven to be noise.
     trust_negative_signal: bool = True

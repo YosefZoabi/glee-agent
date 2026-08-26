@@ -626,6 +626,13 @@ def _buyer_decision(game: dict) -> dict:
             # Stated as arithmetic rather than a cell list so it cannot drift.
             ceiling = shrunk_ceiling(game, p)
             if ceiling * v + (1.0 - ceiling) * u <= price * (1.0 + P.rationing_margin):
+                # A lead bought here is fragile: at m=1.20 one low draw undoes
+                # five good ones, and the field's mass sits at exactly zero, so
+                # a game that ends negative ranks near the floor. Bank the rank.
+                if v < price * P.break_even_cap_below_m:
+                    banked = number(state, "buyer_total_payoff", 0.0) or 0.0
+                    if banked >= P.break_even_profit_cap * price:
+                        return {"decision": "no"}
                 certified = certified_posterior(game, p)
                 if certified is not None and certified * v + (1.0 - certified) * u > price:
                     return {"decision": "yes"}

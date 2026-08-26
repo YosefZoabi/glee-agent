@@ -99,7 +99,18 @@ class BargainingParams:
     # on the board, so run49's 199 games stand as the baseline and the live
     # question becomes the internal one, whether below 0.52 is better still.
     # 0.52 stays exactly where it was so its 281 games pool across the window.
-    opening_grid: tuple[float, ...] = (0.40, 0.46, 0.52)
+    #
+    # run50 answered that, and REVERSED the trend -- the curve turns at 0.52:
+    #
+    #   0.40   n=353   -3.048 rating/game
+    #   0.46   n=359   -2.164
+    #   0.52   n=361   -0.394        0.40 against 0.52: -2.654, t=-9.5
+    #
+    # run49 had 0.60 at -0.777 against 0.52's +0.181, so 0.52 is the peak from
+    # both sides and the search is over. The grid collapses to that one value.
+    # Extrapolating run49's monotone trend without this run would have shipped
+    # 0.40 and cost 2.65 rating a game.
+    opening_grid: tuple[float, ...] = (0.52,)
     # Only where the shipped opening is currently refused. On the open horizon
     # it already clears 45% of the time and banks 0.465; there is nothing to
     # find there and a grid would only put that at risk.

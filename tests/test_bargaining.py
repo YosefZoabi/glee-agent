@@ -1405,28 +1405,27 @@ class TestTheOpeningAskGrid:
         assert P.opening_ask_grid is False
         assert P.opening_grid_known_horizon_only is True
 
-    def test_the_grid_no_longer_carries_a_control(self):
-        # run49 settled the shipped opening at 9.2 sigma against 0.52, and it
-        # was costing -3.144 rating a game to keep sampling it. Every remaining
-        # entry is at least as good as the best thing measured, so the live
-        # question is now the internal one: is below 0.52 better still?
+    def test_the_search_is_over_and_the_opening_is_0_52(self):
+        # run49 walked the ask down and improved monotonically to 0.52; run50
+        # went below it and got worse -- 0.40 at -3.048 rating/game against
+        # 0.52's -0.394, t=-9.5. With run49's 0.60 at -0.777 against 0.52's
+        # +0.181, the peak is 0.52 from both sides.
         assert all(x > 0 for x in P.opening_grid), P.opening_grid
-        assert 0.52 in P.opening_grid, "0.52 must stay so its games pool"
-        assert min(P.opening_grid) < 0.52, "the curve has not turned; sample lower"
+        assert P.opening_grid == (0.52,), P.opening_grid
 
     def test_the_shipped_opening_is_the_one_nobody_signs(self):
         # Not a preference: the number itself. 0.78+ on the known horizon.
         assert self._share(self._open(max_rounds=12, delta_1=0.95, delta_2=0.8)) >= 0.78
 
-    def test_the_grid_moves_the_opening(self, opening_ask_grid):
-        # Different games draw different entries, so across ids the opening is
-        # no longer a single number.
+    def test_the_opening_is_now_a_single_measured_value(self, opening_ask_grid):
+        # The grid was a search and the search finished: every game opens at
+        # 0.52, whatever the schedule would otherwise have computed.
         seen = set()
         for i in range(40):
             g = self._open(max_rounds=12, delta_1=0.95, delta_2=0.8)
             g["game_id"] = "grid-%d" % i
             seen.add(round(self._share(g), 3))
-        assert len(seen) >= 3, seen
+        assert seen == {0.52}, seen
 
     def test_every_draw_is_on_the_grid_or_the_shipped_number(self, opening_ask_grid):
         from glee_agent.params import BARGAINING as BP

@@ -108,6 +108,30 @@ def play_exactly(client, strategy, *, families, target, concurrency, poll_interv
     return len(seen)
 
 
+def _cooldown_resume_at(error) -> float | None:
+    """Seconds to wait out an `agent_cooldown`, from the time the server names.
+
+    A 403 on the queue join is not a reason to exit. The SDK joins queues before
+    its play loop starts, so letting the error out strands every game we are
+    already holding -- and those then time out, which is what earns the ban in
+    the first place. Twice now a forced stop has cost us a thirty-minute outage
+    that nobody was watching for.
+    """
+    import datetime as _dt
+    import re as _re
+    if getattr(error, "code", None) != "agent_cooldown":
+        return None
+    match = _re.search(r"(\d{4}-\d{2}-\d{2}T[\d:.]+)Z", str(error))
+    if not match:
+        return 300.0
+    try:
+        when = _dt.datetime.fromisoformat(match.group(1)).replace(tzinfo=_dt.timezone.utc)
+    except ValueError:
+        return 300.0
+    now = _dt.datetime.now(_dt.timezone.utc)
+    return max(0.0, (when - now).total_seconds())
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     logging.basicConfig(
@@ -153,7 +177,29 @@ def main(argv: list[str] | None = None) -> int:
             )
             log.info("Played %d games (asked for %d).", played, args.max_games)
         else:
-            client.run(play, **run_kwargs)
+            import time as _time
+            deadline = None
+            if args.max_time is not None:
+                deadline = _time.monotonic() + float(args.max_time)
+            while True:
+                try:
+                    client.run(play, **run_kwargs)
+                    break
+                except GleeAPIError as error:
+                    wait = _cooldown_resume_at(error)
+                    if wait is None:
+                        raise
+                    if deadline is not None:
+                        left = deadline - _time.monotonic()
+                        if left <= wait + 30.0:
+                            log.error("Cooldown outlasts the run; stopping.")
+                            break
+                        run_kwargs["max_time"] = left - wait - 5.0
+                    log.warning(
+                        "Queue joins paused (agent_cooldown); waiting %.0fs and resuming.",
+                        wait + 5.0,
+                    )
+                    _time.sleep(wait + 5.0)
     except KeyboardInterrupt:
         log.info("Interrupted -- leaving the queue.")
     except CompetitionNotOpenError as error:

@@ -22,6 +22,8 @@ percentile scale our rating is built from.
 
 from __future__ import annotations
 
+import math
+
 from ..gamestate import (
     OPPOSITE,
     clamp,
@@ -393,6 +395,53 @@ def _bounded_price(game: dict, state: dict, slot: str, role: str, target: float)
     return round(target, 2)
 
 
+def ultimatum_ladder_price(state: dict, slot: str, role: str, price: float) -> float | None:
+    """Move a one-shot price to the top of its own acceptance band, or None.
+
+    The responder's valuation sits on `RUNG_SHAPE` x scale and they cannot trade
+    past it, so in an ultimatum the set of types that sign our price is
+    `{v >= price}` for a seller -- which is constant between two rungs. Moving to
+    just under the next rung up therefore keeps the acceptance set EXACTLY as it
+    was and is paid more for it. The buyer side is the mirror: drop to the
+    highest rung at or under our offer and pay less to the same set of sellers.
+
+    Returns None whenever the move is not free: off-pool valuations, no rung to
+    move to, or a laddered price that would cross our own value (which would
+    turn a dominated improvement into a real concession).
+    """
+    placed = pool_position(number(state, f"{slot}_value", None))
+    if placed is None:
+        return None
+    _index, scale = placed
+    my_value = number(state, f"{slot}_value", None)
+    if my_value is None:
+        return None
+    rungs = [rung * scale for rung in RUNG_SHAPE]
+    # The step has to survive the two-decimal rounding the caller applies, or a
+    # price a whisker under the rung is rounded back ON to it. Quantise here, in
+    # the safe direction, and hand back a number the caller cannot move.
+    step = max(0.01, scale * float(P.ultimatum_ladder_epsilon))
+    if role == "seller":
+        above = [rung for rung in rungs if rung > price + 1e-9]
+        if not above:
+            return None
+        target = min(above)
+        laddered = math.floor((target - step) * 100.0) / 100.0
+        # Never below what we already ask, never at or over the rung, and never
+        # at or under our own value -- each would turn a free move into a real one.
+        if laddered <= price or laddered >= target or laddered <= my_value:
+            return None
+        return laddered
+    at_or_below = [rung for rung in rungs if rung <= price + 1e-9]
+    if not at_or_below:
+        return None
+    target = max(at_or_below)
+    laddered = math.ceil((target + step) * 100.0) / 100.0
+    if laddered >= price or laddered <= target or laddered >= my_value:
+        return None
+    return laddered
+
+
 def _make_offer(game: dict) -> dict:
     state = game["game_state"]
     slot = my_slot(game)
@@ -412,6 +461,12 @@ def _make_offer(game: dict) -> dict:
             action["message"] = _offer_message(role, 0.0)
         return action
     price = _bounded_price(game, state, slot, role, _target_price(state, slot, role))
+    # One shot, so there is no counter to invite: the price we send is the whole
+    # game and acceptance is a step on the opponent's four-point support.
+    if P.ultimatum_ladder and number(state, "max_rounds", None) == 1:
+        laddered = ultimatum_ladder_price(state, slot, role, price)
+        if laddered is not None:
+            price = round(laddered, 2)
     action = {"product_price": price}
     if SEND_MESSAGES and messages_allowed(game):
         action["message"] = _offer_message(role, progress(state, P.unbounded_soft_horizon))

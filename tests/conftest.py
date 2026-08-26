@@ -70,6 +70,16 @@ def rationing_belief(monkeypatch):
 
 
 @pytest.fixture
+def ultimatum_ladder(monkeypatch):
+    """Snap a one-shot price to the top of its own acceptance band."""
+    import dataclasses
+    from glee_agent import params
+    from glee_agent.strategies import negotiation
+    monkeypatch.setattr(negotiation, "P",
+                        dataclasses.replace(params.NEGOTIATION, ultimatum_ladder=True))
+
+
+@pytest.fixture
 def opening_ask_grid(monkeypatch):
     """Sample the round-1 opening from a grid instead of computing one number."""
     import dataclasses

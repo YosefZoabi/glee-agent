@@ -747,3 +747,105 @@ class TestAnAskThatCannotCloseShouldNotTalk:
             negotiation.P = dataclasses.replace(params.NEGOTIATION,
                                                 hide_rung_from_last_word=True)
         assert flagged == pytest.approx(plain)
+
+
+class TestTheUltimatumLadder:
+    """A one-shot price should sit at the top of its own acceptance band.
+
+    The responder's valuation is one of RUNG_SHAPE x scale and they cannot trade
+    past it, so acceptance is a step on four points. Measured over 2,958 of our
+    own incomplete-information seller ultimatums: the deal rate is flat inside a
+    band (52.7% at 1.05-1.15 x M against 51.7% at 1.15-1.20) and falls to 0.0%
+    the moment the ask crosses 1.50. 74% of our asks sat strictly inside a band.
+    """
+
+    def _one_shot(self, **kw):
+        kw.setdefault("action_type", "offer")
+        kw.setdefault("slot", "player_1")
+        kw.setdefault("max_rounds", 1)
+        kw.setdefault("round_", 1)
+        return negotiation_game(**kw)
+
+    def test_the_flag_ships_off(self):
+        from glee_agent import params
+        assert params.NEGOTIATION.ultimatum_ladder is False
+        assert params.NEGOTIATION.ultimatum_ladder_epsilon == 0.001
+
+    def _plain(self, **kw):
+        """The price the schedule sends with the ladder OFF.
+
+        The fixture patches the module-level params, so this has to put them
+        back for the call or "base" is the laddered price itself.
+        """
+        import dataclasses
+        from glee_agent import params
+        from glee_agent.strategies import negotiation
+        kw.setdefault("action_type", "offer")
+        kw.setdefault("slot", "player_1")
+        kw.setdefault("max_rounds", 1)
+        kw.setdefault("round_", 1)
+        saved = negotiation.P
+        negotiation.P = dataclasses.replace(params.NEGOTIATION, ultimatum_ladder=False)
+        try:
+            return play(negotiation_game(**kw))["product_price"]
+        finally:
+            negotiation.P = saved
+
+    def _rungs(self, value):
+        from glee_agent.strategies.negotiation import RUNG_SHAPE, pool_position
+        index, scale = pool_position(value)
+        return [r * scale for r in RUNG_SHAPE]
+
+    def test_it_moves_the_ask_up_to_the_top_of_its_own_band(self, ultimatum_ladder):
+        # The band is decided by the schedule; the ladder only takes the rest of
+        # it. It never reaches for a HIGHER band, because that would trade away
+        # acceptance and stop being free.
+        for value in (80.0, 100.0, 120.0, 10000.0):
+            base = self._plain(my_value=value)
+            armed = play(self._one_shot(my_value=value))["product_price"]
+            rungs = self._rungs(value)
+            above = [r for r in rungs if r > base + 1e-9]
+            if not above:
+                continue
+            assert armed > base, (value, base, armed)
+            assert armed < min(above), (value, base, armed, min(above))
+            assert min(above) - armed < min(above) * 0.01, (value, armed)
+
+    def test_the_acceptance_set_is_unchanged(self, ultimatum_ladder):
+        # The whole safety argument: the set of responder types that sign the
+        # laddered price is identical to the set that signed the original.
+        for value in (80.0, 100.0, 120.0, 8000.0, 1000000.0):
+            base = self._plain(my_value=value)
+            armed = play(self._one_shot(my_value=value))["product_price"]
+            rungs = self._rungs(value)
+            assert {r for r in rungs if r >= base} == {r for r in rungs if r >= armed}, value
+
+    def test_the_laddered_price_stays_strictly_under_its_rung(self, ultimatum_ladder):
+        # The cliff is sharp: measured, an ask a fraction ABOVE the rung is
+        # signed by nobody at all (0.0% over 557 games at 1.50-1.60 x M).
+        for value in (80.0, 100.0, 120.0, 10000.0, 1000000.0):
+            armed = play(self._one_shot(my_value=value))["product_price"]
+            assert armed not in self._rungs(value), (value, armed)
+
+    def test_it_never_prices_at_or_under_our_own_value(self, ultimatum_ladder):
+        for value in (80.0, 100.0, 120.0, 150.0, 8000.0, 1000000.0):
+            out = play(self._one_shot(my_value=value))
+            assert out["product_price"] > value, (value, out["product_price"])
+
+    def test_it_leaves_multi_round_games_alone(self, ultimatum_ladder):
+        # The whole safety argument is one-shot: a responder who can counter is
+        # not choosing between our price and zero.
+        for rounds in (2, 6, 10, None):
+            armed = play(self._one_shot(my_value=100.0, max_rounds=rounds))
+            plain = self._plain(my_value=100.0, max_rounds=rounds)
+            assert armed["product_price"] == plain, rounds
+
+    def test_the_top_rung_seller_is_left_to_the_walk_away_rule(self, ultimatum_ladder):
+        # No rung above 150 to ladder to; `untradable_walk_away` owns that seat.
+        out = play(self._one_shot(my_value=150.0))
+        assert out["product_price"] > 150.0
+
+    def test_an_off_pool_valuation_is_left_alone(self, ultimatum_ladder):
+        armed = play(self._one_shot(my_value=137.0))
+        plain = self._plain(my_value=137.0)
+        assert armed["product_price"] == plain

@@ -519,6 +519,35 @@ class NegotiationParams:
     # is a free lottery ticket on the way out -- exactly the 20 agreements above,
     # one of which paid 0.90 of our own value.
     untradable_lottery_multiple: float = 1.9
+    # Snap a ONE-SHOT price to the top of its own acceptance band.
+    #
+    # The responder's valuation is one of `RUNG_SHAPE` x scale and they cannot
+    # pay past it, so in an ultimatum acceptance is a STEP on four points: every
+    # price strictly inside a band is signed by exactly the same set of types as
+    # a price just under the band's top, and paid less for it.
+    #
+    # Measured over 2,958 incomplete-information seller ultimatums of our own.
+    # Deal rate is flat across a band and falls off a cliff at the support point:
+    #
+    #   ask 1.05-1.15 x M   n=300   signed 52.7%   banked 0.0745
+    #   ask 1.15-1.20 x M   n=402   signed 51.7%   banked 0.2049
+    #   ask 1.25-1.35 x M   n=207   signed 24.2%   banked 0.0174
+    #   ask 1.45-1.50 x M   n=963   signed 25.3%   banked 0.0990
+    #   ask 1.50-1.60 x M   n=557   signed  0.0%   banked 0.0000   <- the cliff
+    #
+    # 2,182 of those 2,958 asks (74%) sat strictly inside a band. Repricing each
+    # to the top of its own band, with the acceptance set unchanged by
+    # construction, is +0.0194 x M per game -- +25.4% on the cell.
+    #
+    # ULTIMATUM ONLY, and that boundary is the whole safety argument. In a
+    # multi-round game the responder can counter instead of accepting, so the
+    # weak-dominance that makes this free does not hold; the knowledge transfer
+    # this came from measured that extension separately and did not ship it.
+    ultimatum_ladder: bool = False
+    # Step back from the support point so the price stays strictly inside the
+    # band. A price AT the rung is still signed, but a float that lands a
+    # fraction above it is signed by nobody -- the cliff is that sharp.
+    ultimatum_ladder_epsilon: float = 0.001
 
     # Identical prices in a row before we read the opponent as done negotiating
     # and take what is on the table. Replayed over every negotiation game we

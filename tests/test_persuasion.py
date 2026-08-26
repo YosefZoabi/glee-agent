@@ -131,8 +131,17 @@ class TestBuyer:
     def test_pays_a_little_for_information_in_the_first_rounds(self):
         # Buying is the only way to observe quality, and that read prices the
         # rest of the game -- so a marginal expected value is worth taking early.
-        marginal = dict(p=0.55, v=100, u=0, price=60, seller_message="yes")
-        assert play(persuasion_game(round_=1, **marginal))["decision"] == "yes"
+        # `press_recommendations` now covers every cell whose bare prior sits
+        # inside `explore_tolerance`, so the window is only visible on its own
+        # where the PRIOR is under the tolerance and the BELIEF has been lifted
+        # over it -- which is the case the window exists for. p*v is 0.833 of
+        # the price, under the 0.85 press band; one bought high round carries
+        # the posterior to 0.84, so expected value is 0.875 of the price: over
+        # the explore bar, under the 1.0 the buyer needs once the window closes.
+        lifted = [persuasion_round(round_=1, message="yes", bought=True, quality="high")]
+        marginal = dict(p=0.8, v=100, u=0, price=96, seller_message="yes",
+                        history=lifted)
+        assert play(persuasion_game(round_=2, **marginal))["decision"] == "yes"
         assert play(persuasion_game(round_=6, **marginal))["decision"] == "no"
 
 
@@ -429,15 +438,17 @@ class TestPressingAFavourableRecommendation:
         game["game_state"]["buyer_total_payoff"] = banked
         return game
 
-    def test_the_flag_ships_off(self):
+    def test_the_flag_shipped(self):
+        # run47: +0.089 percentile pooled over the four cells, t=+4.4.
         from glee_agent import params
-        assert params.PERSUASION.press_recommendations is False
+        assert params.PERSUASION.press_recommendations is True
         assert params.PERSUASION.press_profit_cap == 5.0
 
-    def test_today_we_quit_after_the_probe_rounds(self):
-        # The defect: past the explore window the belief is still the bare prior,
-        # which does not clear the bar, so we refuse for the rest of the game.
-        assert play(self._probe())["decision"] == "no"
+    def test_we_no_longer_quit_after_the_probe_rounds(self):
+        # The defect this fixed: past the explore window the belief was still the
+        # bare prior, which does not clear the bar, so we refused for the rest of
+        # the game and half our (1/3,3.00) games finished in the bottom quarter.
+        assert play(self._probe())["decision"] == "yes"
 
     def test_the_arm_takes_every_recommendation(self, press_recommendations):
         for p, m in ((1 / 3, 3.0), (0.5, 2.0), (0.8, 1.2), (0.8, 1.25)):
@@ -497,16 +508,18 @@ class TestTheRationingBelief:
             round_=round_, total_rounds=20, seller_message="yes", history=history,
         )
 
-    def test_the_flag_ships_off(self):
+    def test_the_flag_shipped(self):
+        # run47: 0.506 against 0.342 in (1/3,2.00), t=+7.1, measured against two
+        # structurally untreated cell groups that drifted +78 and +86 rating.
         from glee_agent import params
-        assert params.PERSUASION.rationing_belief is False
+        assert params.PERSUASION.rationing_belief is True
         assert params.PERSUASION.rationing_margin == 0.15
         assert params.PERSUASION.rationing_cap == 0.95
 
-    def test_the_shipped_buyer_is_frozen_here(self):
-        # The defect, stated as a test: a seller who has declined to praise 70%
-        # of rounds is telling us something, and we refuse anyway.
-        assert play(self._game())["decision"] == "no"
+    def test_the_buyer_is_no_longer_frozen_here(self):
+        # The defect this fixed: a seller who has declined to praise 70% of
+        # rounds is telling us something, and we refused anyway.
+        assert play(self._game())["decision"] == "yes"
 
     def test_the_arm_buys_from_a_seller_who_rations(self, rationing_belief):
         assert play(self._game())["decision"] == "yes"
@@ -1003,3 +1016,75 @@ class TestTheInteriorCanRationOnTheMixToo:
                      for r in range(1, 9)],
         )
         assert _seller_recommends(game) is True
+
+
+class TestTheBreakEvenRationingLine:
+    """The four frozen cells `rationing_belief` cannot reach at any rationing.
+
+    `signal_posterior` shrinks p/rate toward p by seen/(seen + 2) and caps it at
+    0.95, which ceilings it at 0.894 after twenty rounds. With `rationing_margin`
+    the m <= 1.25 cells need 0.920 to 0.958, so the arm never fires there --
+    measured live, 0.000 rounds bought in all 566 run47 games across them.
+
+    Ground truth from the human games, where quality is revealed on every bought
+    round: recommendations taken under `rate < h*p*m` came in 95.5% high over 88
+    buys against a bar of 82.5%, 5.9 sigma, clearing in all four cells.
+    """
+
+    def _game(self, *, p=1 / 3, m=1.2, rate=0.3, seen=10, round_=11, price=100.0,
+              message="yes"):
+        praised = round(rate * seen)
+        rounds = [persuasion_round(round_=r + 1,
+                                   message="yes" if r < praised else "no",
+                                   bought=False)
+                  for r in range(seen)]
+        return persuasion_game(
+            slot="player_2", p=p, v=m * price, u=0.0, price=price,
+            round_=round_, total_rounds=20, seller_message=message, history=rounds,
+        )
+
+    def test_the_arm_ships_off(self):
+        from glee_agent import params
+        assert params.PERSUASION.rationing_break_even is False
+        assert params.PERSUASION.rationing_h == 1.0
+        assert params.PERSUASION.rationing_min_rounds == 5
+
+    def test_the_shipped_buyer_cannot_reach_these_cells(self):
+        # Not a preference -- an arithmetic ceiling. A seller praising 3 rounds
+        # in 10 at p=1/3 certifies P(high|rec) <= 1.0, and we still refuse.
+        for p, m in ((1 / 3, 1.2), (1 / 3, 1.25), (0.5, 1.2), (0.5, 1.25)):
+            assert play(self._game(p=p, m=m, rate=0.3))["decision"] == "no", (p, m)
+
+    def test_the_arm_takes_a_rationed_recommendation(self, rationing_break_even):
+        for p, m in ((1 / 3, 1.2), (1 / 3, 1.25), (0.5, 1.2), (0.5, 1.25)):
+            assert play(self._game(p=p, m=m, rate=0.25))["decision"] == "yes", (p, m)
+
+    def test_the_arm_refuses_a_seller_who_praises_everything(self, rationing_break_even):
+        # rate = 1 collapses the estimate back to p, which is exactly what a
+        # seller who recommends every round has told us.
+        for p, m in ((1 / 3, 1.2), (0.5, 1.25)):
+            assert play(self._game(p=p, m=m, rate=1.0))["decision"] == "no", (p, m)
+
+    def test_the_arm_holds_the_break_even_line(self, rationing_break_even):
+        # p/rate must beat 1/m, i.e. rate must beat p*m. At p=1/3, m=1.2 the
+        # line is 0.40: 0.35 clears it and 0.45 does not.
+        assert play(self._game(rate=0.35, seen=20, round_=20))["decision"] == "yes"
+        assert play(self._game(rate=0.45, seen=20, round_=20))["decision"] == "no"
+
+    def test_the_arm_never_buys_against_a_negative_signal(self, rationing_break_even):
+        # The rate says the seller rations; this round they said pass. Rationing
+        # is only worth reading because the passes are honest.
+        assert play(self._game(rate=0.25, message="no"))["decision"] == "no"
+
+    def test_the_arm_waits_for_enough_rounds_to_read_a_rate(self, rationing_break_even):
+        # One round of watching is not a rate.
+        assert play(self._game(rate=0.0, seen=2, round_=3))["decision"] == "no"
+        assert play(self._game(rate=0.5, seen=2, round_=3))["decision"] == "no"
+
+    def test_the_arm_leaves_the_other_cells_alone(self, rationing_break_even):
+        # It is strictly additive: it can only turn a refusal into a purchase,
+        # and it is only consulted after `rationing_belief` has already declined.
+        from glee_agent import params
+        assert params.PERSUASION.rationing_belief is True
+        # A cell where the shrunk estimate already clears -- unchanged.
+        assert play(self._game(p=1 / 3, m=2.0, rate=0.3))["decision"] == "yes"

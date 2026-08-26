@@ -703,7 +703,12 @@ class PersuasionParams:
     # there, so a zero already scores 0.44-0.49 and is close to Elo-neutral,
     # while q sits under the bar. Four of those five are a pass; the fifth,
     # (1/3,2.00), is `rationing_belief`'s.
-    press_recommendations: bool = False
+    #
+    # run47 measured it: +0.089 percentile pooled over the four probe cells
+    # (t=+4.4, ~+712 rating), +0.164 at m>=2 (t=+6.1). The one cell where the
+    # payoff went backwards, (0.8,1.20), cost -0.001 percentile at t=-0.0 -- so
+    # the payoff loss bought a rank that was already there. Kept at all four.
+    press_recommendations: bool = True
     # ...but stop once far enough ahead, where a purchase is thin and the
     # percentile curve has flattened. Only bites at m < `press_cap_below_m`: a
     # good buy pays just 0.2-0.25x there, so past 5x banked the variance is no
@@ -747,7 +752,16 @@ class PersuasionParams:
     #
     # Ships off. What a replay cannot price is whether buying changes how the
     # seller plays the rest of the game, so this needs a real A/B.
-    rationing_belief: bool = False
+    #
+    # run47 measured it. `rationing_cap` and the `rate_prior_weight` shrinkage
+    # together hold the estimate under 0.894 at twenty rounds, so it can only
+    # ever fire where the bar is loose: of the five frozen cells it reached
+    # exactly one, (1/3,2.00). The other four bought 0.000 rounds in ARM and
+    # control alike, which makes them two matched structural placebos -- they
+    # drifted +78 and +86 rating, and (1/3,2.00) moved +1,310 (0.506 against
+    # 0.342, t=+7.1), buying 5.05 rounds a game and finishing positive 49.2% of
+    # the time against 0.0%. Net of the placebo pair, +1,228.
+    rationing_belief: bool = True
     # Surplus the rationing belief must clear, on top of the price. The estimate
     # saturates optimistically where p/rate hits its cap, so do not buy at the
     # indifference point -- but the margin is doing more work than that here.
@@ -778,6 +792,50 @@ class PersuasionParams:
     # it below so a seller who rations hard early cannot pin the belief at
     # certainty.
     rationing_cap: float = 0.95
+    # Take a recommendation on the bare break-even line, with no shrinkage and
+    # no margin, in the cells `rationing_belief` structurally cannot reach.
+    #
+    # `signal_posterior` shrinks p/rate toward p by seen/(seen + rate_prior_weight)
+    # and caps it at `rationing_cap`. At twenty rounds that ceilings the estimate
+    # at 0.894, under the 0.920-0.958 those four cells need once `rationing_margin`
+    # is added -- so however hard the seller rations there, the arm never fires.
+    # Measured, not argued: 0.000 rounds bought in all 566 run47 games across
+    # (1/3,1.20), (1/3,1.25), (0.5,1.20) and (0.5,1.25), ARM and control alike.
+    #
+    # The shrinkage exists because p/rate is a CEILING. But `h` -- the share of
+    # HIGH units the field actually praises -- is 1.015 (sd 0.039) over ten
+    # cells, so the ceiling is tight, and the correction that fits the data is to
+    # multiply by h rather than to drag the estimate back toward a prior the
+    # seller's rationing has already refuted.
+    #
+    # Priced on the only ground truth that exists for these cells: the human
+    # games, where quality is revealed on every round the human bought. Taking
+    # recommendations under `rate < h*p*m`, restricted to the four cells this
+    # licenses and excluding (1/3,2.00) which is already `rationing_belief`'s:
+    #
+    #   88 buys, 84 high -> P(high|rec) = 0.955 against a bar of 0.825
+    #   +0.130, 5.9 sigma, and clearing separately in all four cells
+    #     (1/3,1.20) +0.119   (1/3,1.25) +0.200
+    #     (0.5,1.20) +0.098   (0.5,1.25) +0.200
+    #   mean banked +0.872x price per game entered, against exactly 0 for
+    #     sitting out, where a zero ranks 0.25-0.37 and neutral is ~0.495
+    #
+    # A cushion factor on top was swept (1.0/1.1/1.2/1.3) and bought nothing:
+    # quality stays flat at ~0.95 while the sample shrinks, so the break-even
+    # line is doing all the discriminating and the extra margin is dead weight.
+    #
+    # Ships OFF, as run48's only arm. Ground truth prices the quality of the
+    # rounds it buys; what it cannot price is whether buying changes how the
+    # seller plays the rest of the game.
+    rationing_break_even: bool = False
+    # Share of HIGH units the field praises. Measured 1.015 (sd 0.039) over the
+    # ten cells where the buyer takes every recommendation, so the sample is
+    # unselected. Kept at 1.0 rather than 1.015: the estimate is a ceiling and
+    # rounding it down is the conservative direction.
+    rationing_h: float = 1.0
+    # Rounds of watching before the rate is worth anything. Below this the rate
+    # is one or two observations and p/rate is noise.
+    rationing_min_rounds: int = 5
     # A seller who signals "no" gives up their own revenue, so the signal is
     # credible; only override it if it has proven to be noise.
     trust_negative_signal: bool = True
@@ -808,6 +866,10 @@ class PersuasionParams:
     #
     # Whether a buyer answers "Recommended." the way it answers "yes" is THEIR
     # move, so no replay can price this and it ships off, behind a real A/B.
+    #
+    # run47 ran that A/B over 6,881 seller games pooled across run45/46/47. On
+    # the objective it is +161 rating at t=1.5, and the binary placebo moved in
+    # all three windows. Stays off.
     bare_recommendation: bool = False
 
 

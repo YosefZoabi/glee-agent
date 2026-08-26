@@ -1374,3 +1374,89 @@ class TestTheEndgameSeatIsPricedOnce:
                              "proposer": "player_2", "round": 4}}
         assert B._final_round_is_ours(st, "player_1") is False
         assert B.endgame_hold_value(st, "player_1") == 0.0
+
+
+class TestTheOpeningAskGrid:
+    """Sampling the opening instead of computing it.
+
+    As player_1 we sit at percentile 0.411 against 0.563 as player_2 over 23,069
+    games, and it is not an information problem -- seeing the opponent's discount
+    factor moves us 0.418 against 0.409 blind. With a KNOWN horizon we open at
+    0.780 and it is signed at round 1 in 1.8% of games; on the open horizon we
+    open at 0.631, it clears 45.0%, and we bank 0.465 against 0.384.
+
+    That comparison cannot be de-confounded from the logs -- inside the known
+    horizon our round-1 ask has sd 0.017 and has never once been below 0.78 in
+    23,069 games. So this samples the opening rather than guessing a better one.
+    """
+
+    def _open(self, **kw):
+        kw.setdefault("action_type", "offer")
+        kw.setdefault("slot", "player_1")
+        kw.setdefault("round_", 1)
+        kw.setdefault("money", 1000)
+        return bargaining_game(**kw)
+
+    def _share(self, game):
+        out = play(game)
+        return out["alice_gain"] / 1000.0
+
+    def test_the_arm_ships_off(self):
+        assert P.opening_ask_grid is False
+        assert P.opening_grid[-1] == -1.0
+        assert P.opening_grid_known_horizon_only is True
+
+    def test_the_shipped_opening_is_the_one_nobody_signs(self):
+        # Not a preference: the number itself. 0.78+ on the known horizon.
+        assert self._share(self._open(max_rounds=12, delta_1=0.95, delta_2=0.8)) >= 0.78
+
+    def test_the_grid_moves_the_opening(self, opening_ask_grid):
+        # Different games draw different entries, so across ids the opening is
+        # no longer a single number.
+        seen = set()
+        for i in range(40):
+            g = self._open(max_rounds=12, delta_1=0.95, delta_2=0.8)
+            g["game_id"] = "grid-%d" % i
+            seen.add(round(self._share(g), 3))
+        assert len(seen) >= 3, seen
+
+    def test_every_draw_is_on_the_grid_or_the_shipped_number(self, opening_ask_grid):
+        from glee_agent.params import BARGAINING as BP
+        allowed = {round(x, 3) for x in BP.opening_grid if x >= 0}
+        for i in range(60):
+            g = self._open(max_rounds=12, delta_1=0.95, delta_2=0.8)
+            g["game_id"] = "grid-%d" % i
+            got = round(self._share(g), 3)
+            # Either a grid entry, or the -1.0 sentinel leaving the shipped
+            # opening untouched -- which in this cell is 0.78 or above.
+            assert got in allowed or got >= 0.78, got
+
+    def test_the_draw_is_stable_for_a_game(self, opening_ask_grid):
+        # Seeded from the game id, so replaying a log reproduces the opening.
+        g = self._open(max_rounds=12, delta_1=0.95, delta_2=0.8)
+        g["game_id"] = "stable-1"
+        assert self._share(g) == self._share(g)
+
+    def test_it_leaves_the_open_horizon_alone(self, opening_ask_grid):
+        # There the opening already clears 45% of the time and banks 0.465.
+        base = []
+        for i in range(30):
+            g = self._open(max_rounds=None, delta_1=0.95, delta_2=0.8)
+            g["game_id"] = "open-%d" % i
+            base.append(round(self._share(g), 4))
+        assert len(set(base)) == 1, set(base)
+
+    def test_it_only_touches_round_one(self, opening_ask_grid):
+        later = []
+        for i in range(30):
+            g = self._open(max_rounds=12, round_=3, delta_1=0.95, delta_2=0.8)
+            g["game_id"] = "later-%d" % i
+            later.append(round(self._share(g), 4))
+        assert len(set(later)) == 1, set(later)
+
+    def test_it_never_offers_the_opponent_nothing(self, opening_ask_grid):
+        for i in range(40):
+            g = self._open(max_rounds=12, delta_1=1.0, delta_2=0.8)
+            g["game_id"] = "floor-%d" % i
+            out = play(g)
+            assert out["bob_gain"] > 0

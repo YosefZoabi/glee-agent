@@ -46,6 +46,48 @@ class BargainingParams:
     # pays nothing for delay can hold out for everything. No opponent signs that,
     # so believing it turns into "accept nothing below 97%" and a $0 deadlock.
     never_demand_above: float = 0.75
+    # Sample the round-1 opening across a grid instead of computing one number.
+    #
+    # Measured over 23,069 bargaining games. As player_1 we sit at percentile
+    # 0.411 against 0.563 as player_2, and the gap is not information: seeing the
+    # opponent's discount factor changes nothing (0.418 seen against 0.409
+    # blind). It is that our opening is a number nobody signs. With a KNOWN
+    # horizon we open at 0.780 and it is accepted at round 1 in 1.8% of games;
+    # we then haggle to round 4-6 and take 0.384 after discounting. On the open
+    # horizon we open at 0.631, it clears 45.0% of the time, and we bank 0.465.
+    #
+    # Where our opening varies inside a cell the low branch banks more in 9 of 9
+    # cells -- (0.95,0.95) is the cleanest, 0.520 asked clearing 79.7% and
+    # banking 0.485, against 0.797 asked clearing 0.0% and banking 0.364.
+    #
+    # That comparison is confounded (the branches are the horizon flag itself),
+    # and it cannot be de-confounded from the logs: inside the known-horizon
+    # cells our round-1 ask has sd 0.017, and in 23,069 games we have NEVER once
+    # opened below 0.78 there. There is no counterfactual to read, so this is a
+    # measurement rather than a fix -- it draws the opening from a grid, seeded
+    # by game id so a replay reproduces it, and one run returns the whole
+    # acceptance-and-banked curve instead of one more point at 0.80.
+    #
+    # The grid keeps the shipped opening as its last entry, so the arm carries
+    # its own matched control alongside the agents that do not run it at all.
+    #
+    # Anchoring note, separate from this arm and NOT changed here: `_make_offer`
+    # takes its floor from `proposer_share(delta_me, delta_opp, None)` -- the
+    # INFINITE-horizon equilibrium -- in games that stop at round 12 with the
+    # opponent holding the last proposal. The finite recursion is far lower
+    # (0.236 against 0.513 at (0.95,0.95), 0.000 against 0.500 at (1.0,1.0)).
+    # Neither is the right target: we bank 0.364 where the finite number says
+    # 0.236, so the field does not play it either. The grid measures what the
+    # field actually signs, which is what the floor should have been derived
+    # from in the first place.
+    opening_ask_grid: bool = False
+    # Shares of the pot to sample. The last is the shipped behaviour, left as a
+    # sentinel so the control lives inside the same agents and the same window.
+    opening_grid: tuple[float, ...] = (0.52, 0.60, 0.68, 0.76, -1.0)
+    # Only where the shipped opening is currently refused. On the open horizon
+    # it already clears 45% of the time and banks 0.465; there is nothing to
+    # find there and a grid would only put that at risk.
+    opening_grid_known_horizon_only: bool = True
 
     # --- What rejecting is really worth ----------------------------------
     # Measured over 55 games. The equilibrium continuation assumes an opponent

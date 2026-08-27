@@ -1115,6 +1115,32 @@ class PersuasionParams:
     # Rounds of watching before the rate is worth anything. Below this the rate
     # is one or two observations and p/rate is noise.
     rationing_min_rounds: int = 5
+
+    # --- A seller's own templates are a signal they cannot take back --------
+    # Sellers reuse a small script: across 8,237 text-seller games the median
+    # game contains 2 distinct messages and the mean 3.4. Those templates carry
+    # real information -- where two of them each drew >=2 purchases, the spread
+    # between their hit rates averages 0.48, and 31% of games separate by >=0.80.
+    #
+    # Pooled over 6,737 templates with >=3 purchases: 1,846 came back ALL high
+    # and 612 ALL low. The seller is telling us which script means what, for
+    # free, and we were reading only whether the words sounded positive.
+    #
+    # This vetoes the clearest half. Over 79,100 purchases, 3,272 (4.1%) were
+    # made on a template that had ALREADY delivered `template_min_buys`
+    # purchases in that same game without a single high:
+    #
+    #     of those 3,272:  2,889 were low,  383 were high  ->  11.7% hit rate
+    #
+    # 11.7% is under the bar of EVERY cell in the game -- the most forgiving is
+    # m=4.00 at 25%, the tightest m=1.20 at 83% -- so these are negative-value
+    # in all of them and the veto needs no cell-specific tuning.
+    #
+    # Reads only quality we have already been shown on rounds we bought, so it
+    # invents nothing: see [[glee-buyer-seat-is-unfalsifiable]] for why that
+    # restriction matters here.
+    template_veto: bool = False
+    template_min_buys: int = 2
     # ...and stop once a low-m game is ahead. Where the multiplier is small a
     # lead is FRAGILE: at m=1.20 a high pays +0.20x and a low costs -1.00x, so
     # one bad draw wipes out five good ones. Riding that out is not patience,

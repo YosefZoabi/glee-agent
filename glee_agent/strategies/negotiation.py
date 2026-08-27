@@ -549,6 +549,27 @@ def _make_decision(game: dict) -> dict:
     # mid-schedule number we will never actually offer would overstate what
     # holding out is worth.
     target = _target_price(state, slot, role, last_word=last_proposal_ours and left == 2)
+
+    # Walk the target down to something signable BEFORE the road runs out. A
+    # bounded complete-information game that reaches the endgame still holding
+    # 0.743 of the surplus does not get 0.743 -- it gets whatever token the
+    # endgame branch above will take, which measured 0.0433 of buyer value
+    # across 403 games. See `ci_late_target`.
+    if (
+        P.ci_late_concession
+        and opponent_value is not None
+        and bounded
+        and not final
+        and left is not None
+        and left <= P.ci_late_rounds
+    ):
+        span = abs(opponent_value - my_value)
+        if span > 0:
+            late = (my_value + P.ci_late_target * span if role == "seller"
+                    else my_value - P.ci_late_target * span)
+            if _profit(role, late, my_value) < _profit(role, target, my_value):
+                target = late
+
     if gain >= _profit(role, target, my_value) * P.accept_slack:
         return {"decision": "AcceptOffer"}
 

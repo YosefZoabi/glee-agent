@@ -165,6 +165,38 @@ class BargainingParams:
     # yardstick, the discounted payoff is.
     patient_hold_min_delta: float = 0.999
 
+    # --- Hold the equilibrium share when OUR clock is the slower one --------
+    # Measured 2026-08-27 over 3,632 open-horizon bargaining games. The losses
+    # sit exactly where we hold a MODERATE patience edge, and we bank well below
+    # the subgame-perfect proposer share while doing it:
+    #
+    #   d_us/d_them   we bank   SPE share   rating
+    #   0.95 / 0.90    0.601      0.690     -5.129
+    #   0.90 / 0.80    0.667      0.714     -4.478
+    #   0.95 / 0.80    0.800      0.833     -3.396
+    #   1.00 / 0.95    0.789        --      +3.160
+    #   0.80 / 0.90    0.444        --      +1.803
+    #
+    # When we are the impatient one we concede and score fine; when the edge is
+    # overwhelming (delta 1.0) we score fine. Only the moderate edge bleeds.
+    #
+    # The cause is `discounted_hold_cap`, which caps the bar whenever OUR clock
+    # runs -- without asking whether THEIRS runs faster. `patient_hold` cannot
+    # reach it: that is gated to delta 1.0 and the open-horizon floor beneath is
+    # `min_accept_share` (0.35).
+    #
+    # Complete and incomplete information both score -2.89 at delta 0.95, so
+    # this is not an information problem -- the equilibrium term is present in
+    # complete-info games and gets walked away anyway.
+    #
+    # NOTE: the open-horizon accept side has beaten three previous attempts --
+    # min_accept 0.50/0.60/0.70, accept_slack 1.05/1.10 and rounds_to_settle
+    # 1/2 all recovered the same 4.95 pot-units on run41+42. What is different
+    # here is the condition: this raises the bar ONLY where we hold the edge,
+    # instead of raising it everywhere. It ships as an arm for that reason.
+    patient_edge_on: bool = False
+    patient_edge_scale: float = 1.0
+
     # --- What rejecting is really worth ----------------------------------
     # Measured over 55 games. The equilibrium continuation assumes an opponent
     # who concedes toward it; the field does not. Their offers moved a median
@@ -644,6 +676,57 @@ class NegotiationParams:
     # is a free lottery ticket on the way out -- exactly the 20 agreements above,
     # one of which paid 0.90 of our own value.
     untradable_lottery_multiple: float = 1.9
+
+    # --- Walk when their own offers have ruled out every tradable rung ------
+    # Measured 2026-08-27 over 4,757 negotiation games carrying rating_delta.
+    # A deliberate walk-away and a ground-out no-deal pay the SAME zero, and
+    # score 2.1 points apart:
+    #
+    #   normal seat, walked_away   n= 447   +0.159
+    #   normal seat, no_deal       n=1113   -1.958
+    #
+    # That is within NORMAL seats -- the extreme seats `untradable_walk_away`
+    # already handles are excluded, so this is not the seat, it is the exit.
+    # 1,113 no-deals x 2.117 is ~2,356 rating-units over 4,757 games.
+    #
+    # Where the grinding happens (share of games ending no_deal):
+    #   seller on rung 120  48%     buyer on rung 100  49%
+    #   seller on rung 100  32%     buyer on rung 120  26%
+    #
+    # `tradable_rungs` already narrows the opponent's possible rungs from the
+    # prices they have sent, but keeps a fallback so it can never empty. This
+    # reads the same evidence WITHOUT the fallback: if every rung that could
+    # trade with us has been ruled out, there is no deal to find.
+    #
+    # Held back by `evidence_walk_min_rounds` because one early lowball is not
+    # evidence -- their best offer runs to a median 1.06x their true value, so
+    # the elimination needs `evidence_walk_tolerance` of slack and a few rounds
+    # of it before it means anything.
+    # Replaced the rung-elimination version, which pre-flight showed fires in 4
+    # games out of 198,459 decision points -- and all 4 had ENDED IN AGREEMENT.
+    # Their offers essentially never rule out every tradable rung, so evidence
+    # of that kind does not exist. What does exist is the clock.
+    #
+    # Agreements in the bleeding seats close at a median round 10-13. Walking
+    # after that, while nothing profitable is on the table, converts no-deals
+    # without forfeiting many deals:
+    #
+    #   seat              agree%  no-deal%  walk after r12: forfeits / converts
+    #   seller rung 120     27%      49%          51 /  182
+    #   buyer  rung 100     41%      39%          46 /  125
+    #   seller rung 100     55%      29%         104 /  121
+    #   buyer  rung 120     62%      24%         110 /  111
+    #
+    # Valuing a converted no-deal at the measured +2.117 and a forfeited
+    # agreement at its own seat mean, the four seats total roughly +1,000
+    # rating-units. The sign survives even if agreements are worth 5x what the
+    # global mean says, which is why it is worth an arm.
+    #
+    # Guarded on "nothing profitable has been offered": if they have put a
+    # deal on the table we would have taken it, so this can only fire in games
+    # that are genuinely going nowhere.
+    stalled_walk_away: bool = False
+    stalled_walk_round: int = 12
     # Snap a ONE-SHOT price to the top of its own acceptance band.
     #
     # The responder's valuation is one of `RUNG_SHAPE` x scale and they cannot

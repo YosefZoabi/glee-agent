@@ -356,13 +356,42 @@ def _untradable_seat(state: dict, slot: str) -> bool:
     return index == 0
 
 
+def _stalled_out(state: dict, slot: str) -> bool:
+    """True when the clock has run past where deals close and nothing pays us.
+
+    A deliberate walk-away and a ground-out no-deal pay the same zero but score
+    2.117 apart (walked_away +0.159 against no_deal -1.958, measured within
+    NORMAL seats over 4,757 games). This is the exit, not the seat.
+
+    Only fires when no price they have offered would pay us anything -- if a
+    profitable one had landed we would already have signed it -- so it can
+    never cost a deal that was actually available. See `stalled_walk_away`.
+    """
+    if not P.stalled_walk_away:
+        return False
+    if int(number(state, "round", 1) or 1) < int(P.stalled_walk_round):
+        return False
+    my_value = number(state, f"{slot}_value", None)
+    if my_value is None:
+        return False
+    role = _role(state, slot)
+    prices = _their_prices(state, slot)
+    if not prices:
+        return False
+    # Their best offer so far, scored in our own money.
+    best = max(_profit(role, price, my_value) for price in prices)
+    return best <= 0.0
+
+
 def _no_zone_of_agreement(state: dict, slot: str) -> bool:
     """True when no price exists that pays both sides."""
     seller_value = number(state, "player_1_value", None)
     buyer_value = number(state, "player_2_value", None)
     if seller_value is not None and buyer_value is not None:
         return seller_value > buyer_value
-    return bool(P.untradable_walk_away) and _untradable_seat(state, slot)
+    if bool(P.untradable_walk_away) and _untradable_seat(state, slot):
+        return True
+    return _stalled_out(state, slot)
 
 
 def _my_last_price(game: dict, slot: str) -> float | None:

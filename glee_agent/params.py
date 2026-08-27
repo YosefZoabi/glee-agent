@@ -116,6 +116,39 @@ class BargainingParams:
     # find there and a grid would only put that at risk.
     opening_grid_known_horizon_only: bool = True
 
+    # --- Hold the midgame when our own clock is nearly free ----------------
+    # `stonewall_threshold` prices an opponent who never concedes, and it was
+    # calibrated on 55 games. Over 7,104 known-horizon games since 08-24 it is
+    # the binding term whenever our own last proposal is far off, and it sets
+    # the bar as low as 0.118 of the pot -- so we sign 0.30-0.50 offers in the
+    # opening rounds.
+    #
+    # Facing a 0.30-0.50 offer by round 4, split by what we did with it:
+    #
+    #   delta 1.00   accept n=281  banked 0.510  rating -3.147
+    #                refuse n=1037 banked 0.875  rating +4.677   (+7.8)
+    #   delta 0.95   accept n=506  banked 0.426  rating -2.053
+    #                refuse n=771  banked 0.887  rating +4.424   (+6.5)
+    #   delta 0.90   accept n=1170 banked 0.424  rating -1.057
+    #                refuse n=156  banked 0.777  rating -4.147   (-3.1)
+    #
+    # The sign flips at 0.90, which is why the gate sits at 0.95: six rounds of
+    # a 10%-a-round clock eats more than the extra share is worth. Above it,
+    # holding is close to free and the field concedes.
+    #
+    # Holding cannot lose the game. No-deal in known-horizon bargaining is
+    # 0.00% across all four deltas (n=7,104) because the endgame collapse below
+    # still takes anything at or above `endgame_floor` once the road runs out.
+    # That backstop is what makes this an option rather than a gamble, and it is
+    # why the floor is applied only while `left > endgame_rounds`.
+    #
+    # By offer band, the value of refusing (delta >= 0.95, round <= 4):
+    #   0.30-0.45  +6.465     0.45-0.55  +7.368
+    #   0.55-0.70  +2.762     0.70+      accepting is already right
+    patient_hold_on: bool = False
+    patient_hold_share: float = 0.60
+    patient_hold_min_delta: float = 0.95
+
     # --- What rejecting is really worth ----------------------------------
     # Measured over 55 games. The equilibrium continuation assumes an opponent
     # who concedes toward it; the field does not. Their offers moved a median
@@ -513,6 +546,30 @@ class NegotiationParams:
     # can be scored against it directly instead of against a schedule. Refuse
     # anything under this fraction of it while road remains. 0.0 disables.
     known_zone_floor: float = 0.0
+
+    # --- Do not arrive at the last round still asking for the surplus -------
+    # Bounded complete-information games as SELLER score -4.63 a game, the worst
+    # cell in the family, while the ONE-SHOT version of the identical game
+    # scores +6.10. The difference is not the price we ask, it is where we are
+    # standing when the road runs out:
+    #
+    #   settled by round 8   n=66   banked 0.2365 of buyer value   rating +5.9
+    #   ground to round 10   n=403  banked 0.0433 of buyer value   rating -6.4
+    #
+    # 86% of them grind. Our schedule terminates at `surplus_target` (0.65) and
+    # our final ask still captures 0.743 of the surplus, which the grinders do
+    # not sign -- so the endgame branch fires with two rounds left and takes any
+    # positive profit at all, which is the 0.0433.
+    #
+    # Negotiation has no discounting, so the grind itself is free; what is not
+    # free is holding a number nobody signs until the only move left is a token.
+    # This walks the target down to something signable a few rounds EARLY, so
+    # the deal lands at a real share instead of a scrap. It can only make us
+    # more willing to deal, and bounded complete-information games already fail
+    # just 2.1% of the time.
+    ci_late_concession: bool = False
+    ci_late_rounds: int = 4
+    ci_late_target: float = 0.35
 
     # --- seats with no counterparty ---------------------------------------
     # Valuations sit on four rungs -- 80, 100, 120, 150 -- of ONE shared scale.

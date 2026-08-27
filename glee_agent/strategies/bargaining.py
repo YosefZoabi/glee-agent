@@ -684,6 +684,21 @@ def _make_decision(game: dict) -> dict:
     )
 
     left = rounds_left(state, P.unbounded_soft_horizon)
+
+    # A bounded game has a backstop the open one does not: once the road runs
+    # out the collapse below signs anything at or above `endgame_floor`, and
+    # no-deal in known-horizon bargaining is 0.00% over 7,104 games. So while
+    # there is still road, a nearly-free clock should not be signing the
+    # 0.30-0.50 offers `stonewall_threshold` waves through. See
+    # `patient_hold_share` for the split that sets the 0.95 gate.
+    if (
+        P.patient_hold_on
+        and left is not None
+        and left > P.endgame_rounds
+        and _deltas(state, slot)[0] >= P.patient_hold_min_delta
+    ):
+        threshold = max(threshold, money * P.patient_hold_share)
+
     if left is None:
         # Open-ended game: no final round will ever arrive to force our hand, so
         # a threshold we hold forever is a threshold that pays $0. Observed: 50

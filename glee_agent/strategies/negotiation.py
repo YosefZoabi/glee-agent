@@ -498,7 +498,18 @@ def _make_decision(game: dict) -> dict:
     # captured a median 27.9% of the surplus against 50.0% everywhere else.
     last_proposal_ours = left is not None and left % 2 == 0
     if final or (left is not None and left <= P.endgame_rounds and not last_proposal_ours):
-        if gain > 0:
+        # The seat without the last word is where this family bleeds, and taking
+        # any scrap one round early is what hands it over. See
+        # `endgame_hold_share`. The FINAL round still takes anything positive --
+        # rejecting there ends the game at zero, so the backstop has to stay.
+        floor = 0.0
+        if P.endgame_hold_on and not final:
+            other_value = number(state, f"{OPPOSITE[slot]}_value", None)
+            if other_value is not None:
+                span = abs(other_value - my_value)
+                if span > 0:
+                    floor = span * P.endgame_hold_share
+        if gain > floor:
             return {"decision": "AcceptOffer"}
         if final:
             # No counteroffer exists on the last round; rejecting ends the game.

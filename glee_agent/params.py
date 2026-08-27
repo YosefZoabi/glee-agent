@@ -584,6 +584,31 @@ class NegotiationParams:
     # more willing to deal, and bounded complete-information games already fail
     # just 2.1% of the time.
     ci_late_concession: bool = False
+
+    # --- Do not bank a token one round before the road runs out -------------
+    # Measured 2026-08-27 over 4,792 negotiation games with rating_delta. In
+    # COMPLETE-information games `seller` is always player_1 and `buyer` always
+    # player_2, so role and seat are the same variable -- what decides the game
+    # is who holds the LAST word:
+    #
+    #   one-shot, we propose      +6.106      one-shot, they propose   -5.033
+    #   10-round, they close      -7.445      10-round, we close       +4.309
+    #
+    # Incomplete information shows the identical shape (10-round player_1 -0.945
+    # against player_2 +0.583). This is the failure `patient_hold` fixed in
+    # bargaining: the seat without the last word caves to the endgame sweep.
+    #
+    # `ci_late_concession` attacked it by conceding EARLIER and cost ~140 rating
+    # on three agents. The bargaining evidence says the opposite is right.
+    #
+    # Holding is nearly free: in (10, seller, complete info) dealing scores
+    # -7.437 and a no-deal -9.200, so refusing the dump risks 1.8 to chase the
+    # +4.309 the other seat earns -- break-even needs 13.4% of opponents to move.
+    #
+    # Bites only at `endgame_rounds` while NOT the final round; on the final
+    # round rejecting ends the game at zero, so that backstop stays.
+    endgame_hold_on: bool = False
+    endgame_hold_share: float = 0.25
     ci_late_rounds: int = 4
     ci_late_target: float = 0.35
 

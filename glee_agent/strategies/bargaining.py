@@ -704,12 +704,6 @@ def _make_decision(game: dict) -> dict:
     # runs -- without asking whether theirs runs faster. Where we are strictly
     # the more patient side, the subgame-perfect proposer share is a floor we
     # can actually defend. See `patient_edge_on`.
-    if P.patient_edge_on and left is None:
-        delta_me, delta_them = _deltas(state, slot)
-        if delta_me > delta_them + 1e-9:
-            edge = proposer_share(delta_me, delta_them, None) * P.patient_edge_scale
-            threshold = max(threshold, money * clamp(edge, 0.0, 1.0 - P.min_opponent_share))
-
     if left is None:
         # Open-ended game: no final round will ever arrive to force our hand, so
         # a threshold we hold forever is a threshold that pays $0. Observed: 50
@@ -739,6 +733,20 @@ def _make_decision(game: dict) -> dict:
         # refuses arrive early. See `discounted_hold_cap`.
         threshold = min(threshold, money * discounted_hold_cap(state, slot))
         threshold = min(threshold, money * costless_hold_cap(state, slot))
+
+        # ...but the caps above ask only whether OUR clock runs, never whether
+        # theirs runs faster. Where we are strictly the more patient side the
+        # subgame-perfect proposer share is a floor we can actually defend, so
+        # it is re-applied here -- after the walk-down, which is the whole point:
+        # applied before it, `discounted_hold_cap` simply mins it away again.
+        # Deliberately ahead of the round-cap collapse below, so the $0 safety
+        # valve at `open_horizon_cap` still overrides it.
+        if P.patient_edge_on:
+            delta_me, delta_them = _deltas(state, slot)
+            if delta_me > delta_them + 1e-9:
+                edge = proposer_share(delta_me, delta_them, None) * P.patient_edge_scale
+                threshold = max(threshold,
+                                money * clamp(edge, 0.0, 1.0 - P.min_opponent_share))
         # The horizon is not really open: the server stops these games at
         # `open_horizon_cap` and pays both sides $0. Nothing above knows that,
         # because `rounds_left` is None and `is_final_round` never fires, so

@@ -147,7 +147,23 @@ class BargainingParams:
     #   0.55-0.70  +2.762     0.70+      accepting is already right
     patient_hold_on: bool = False
     patient_hold_share: float = 0.60
-    patient_hold_min_delta: float = 0.95
+    # RAISED 0.95 -> 0.999 on 2026-08-27. The 0.95 gate rested on a pooled
+    # read that was Simpson's paradox: player_2 refuses nearly everything
+    # (1,507 refusals to 15 accepts) and scores well, player_1 caves and scores
+    # badly, so pooling the seats made "refusing" look worth +6..+8 when it was
+    # measuring the SEAT. The arm fires almost only in player_1 (60.7% of its
+    # d=0.95 decisions against 0.7% of player_2's), so player_1 is the only
+    # comparison that counts. Within it:
+    #
+    #   delta 1.00   accept -2.84 (n=306)  refuse -2.26 (n=292)   +0.59  t=+2.0
+    #   delta 0.95   accept -2.11 (n=533)  refuse -4.72 (n=52 )   -2.62  t=-4.0
+    #   delta 0.90   accept -2.06 (n=543)  refuse -4.89 (n=35 )   -2.83  t=-3.3
+    #
+    # Only the delta 1.00 row is well powered, and only it is positive. At 0.95
+    # refusing banks MORE of the pot (0.719 against 0.435) and scores WORSE,
+    # because the extra rounds are discounted away -- nominal share is not the
+    # yardstick, the discounted payoff is.
+    patient_hold_min_delta: float = 0.999
 
     # --- What rejecting is really worth ----------------------------------
     # Measured over 55 games. The equilibrium continuation assumes an opponent

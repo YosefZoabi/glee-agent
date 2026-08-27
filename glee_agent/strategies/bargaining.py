@@ -699,6 +699,17 @@ def _make_decision(game: dict) -> dict:
     ):
         threshold = max(threshold, money * P.patient_hold_share)
 
+    # An open game with no final round has no endgame backstop, so the bar is
+    # walked down and capped by `discounted_hold_cap` the moment our own clock
+    # runs -- without asking whether theirs runs faster. Where we are strictly
+    # the more patient side, the subgame-perfect proposer share is a floor we
+    # can actually defend. See `patient_edge_on`.
+    if P.patient_edge_on and left is None:
+        delta_me, delta_them = _deltas(state, slot)
+        if delta_me > delta_them + 1e-9:
+            edge = proposer_share(delta_me, delta_them, None) * P.patient_edge_scale
+            threshold = max(threshold, money * clamp(edge, 0.0, 1.0 - P.min_opponent_share))
+
     if left is None:
         # Open-ended game: no final round will ever arrive to force our hand, so
         # a threshold we hold forever is a threshold that pays $0. Observed: 50

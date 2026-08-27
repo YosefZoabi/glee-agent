@@ -66,6 +66,41 @@ def _is_positive(signal) -> bool:
     return not any(hint in text for hint in _NEGATIVE_HINTS)
 
 
+def _template_key(message) -> str:
+    """Collapse a seller message to the script it came from.
+
+    Sellers reuse a handful of fixed strings, so exact text after normalising
+    case, punctuation and whitespace identifies the template. Deliberately not
+    fuzzy: a near-match is a different sentence, and two scripts that differ by
+    one clause are exactly the pair we need to tell apart.
+    """
+    text = "".join(ch.lower() for ch in str(message) if ch.isalnum() or ch == " ")
+    return " ".join(text.split())
+
+
+def template_is_proven_bad(game: dict, message) -> bool:
+    """True when THIS script has already paid us nothing, repeatedly.
+
+    Counts only rounds we bought, because quality is revealed nowhere else.
+    See `template_veto` for the 79,100-purchase measurement behind it.
+    """
+    if not P.template_veto:
+        return False
+    key = _template_key(message)
+    if not key:
+        return False
+    bought = high = 0
+    for entry in history(game):
+        if not entry.get("bought"):
+            continue
+        if _template_key(entry.get("seller_message")) != key:
+            continue
+        bought += 1
+        if str(entry.get("quality") or "").lower() == "high":
+            high += 1
+    return bought >= int(P.template_min_buys) and high == 0
+
+
 def _rng_unit(*parts) -> float:
     """A deterministic pseudo-random number in [0, 1).
 
@@ -561,6 +596,12 @@ def _buyer_decision(game: dict) -> dict:
         return {"decision": "no"}
 
     signal = state.get("seller_message")
+    # A script that has already sold us nothing but low quality is a negative
+    # signal whatever its words say -- and the words are the seller's to choose,
+    # while the record is not. Vetoes ahead of every buy path below, including
+    # the prior-clears-the-bar one, because 11.7% is under every cell's bar.
+    if template_is_proven_bad(game, signal):
+        return {"decision": "no"}
     if signal is not None and not _is_positive(signal) and P.trust_negative_signal:
         # Talking us out of a sale costs the seller their own revenue, so the
         # only reason to do it is that the product really is bad.

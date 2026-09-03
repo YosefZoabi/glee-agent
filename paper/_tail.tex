@@ -1,0 +1,284 @@
+\bibliographystyle{plain}
+\begin{thebibliography}{99}\small
+
+\bibitem{shapira2024glee}
+E.~Shapira, O.~Madmon, M.~Tennenholtz, and R.~Reichart.
+GLEE: A unified framework and benchmark for language-based economic environments.
+\emph{arXiv:2410.05254}, 2024. \url{https://arxiv.org/abs/2410.05254}
+
+\bibitem{rubinstein1982}
+A.~Rubinstein. Perfect equilibrium in a bargaining model.
+\emph{Econometrica}, 50(1):97--109, 1982.
+
+\bibitem{kamenica2011bayesian}
+E.~Kamenica and M.~Gentzkow. Bayesian persuasion.
+\emph{American Economic Review}, 101(6):2590--2615, 2011.
+
+\bibitem{crawford1982strategic}
+V.~P. Crawford and J.~Sobel. Strategic information transmission.
+\emph{Econometrica}, 50(6):1431--1451, 1982.
+
+\bibitem{myerson1983}
+R.~B. Myerson and M.~A. Satterthwaite. Efficient mechanisms for bilateral trading.
+\emph{Journal of Economic Theory}, 29(2):265--281, 1983.
+
+\bibitem{baarslag2014decoupling}
+T.~Baarslag, K.~Hindriks, M.~Hendrikx, A.~Dirkzwager, and C.~Jonker.
+Decoupling negotiating agents to explore the space of negotiation strategies.
+In \emph{Novel Insights in Agent-based Complex Automated Negotiation}, 2014.
+
+\bibitem{baarslag2013acceptance}
+T.~Baarslag, K.~Hindriks, and C.~Jonker. Acceptance conditions in automated negotiation.
+In \emph{Complex Automated Negotiations}, 2013.
+
+\bibitem{baarslag2016survey}
+T.~Baarslag, M.~J.~C. Hendrikx, K.~V. Hindriks, and C.~M. Jonker.
+Learning about the opponent in automated bilateral negotiation: a comprehensive
+survey of opponent modeling techniques.
+\emph{Autonomous Agents and Multi-Agent Systems}, 30(5):849--898, 2016.
+
+\bibitem{anac2011}
+T.~Baarslag et al. Evaluating practical negotiating agents: results and analysis
+of the 2011 international competition.
+\emph{Artificial Intelligence}, 198:73--103, 2013.
+
+\bibitem{ochsroth1989}
+J.~Ochs and A.~E. Roth. An experimental study of sequential bargaining.
+\emph{American Economic Review}, 79(3):355--384, 1989.
+
+\end{thebibliography}
+
+% =====================================================================
+%  SUPPLEMENTARY MATERIAL -- not part of the 4-page main body.
+% =====================================================================
+\appendix
+\newpage
+\section{Supplementary figure and tables}
+
+% Appendix floats are numbered A1, A2, ... so a reference from the main text
+% reads unambiguously as supplementary material.
+\setcounter{table}{0}
+\setcounter{figure}{0}
+\renewcommand{\thetable}{A\arabic{table}}
+\renewcommand{\thefigure}{A\arabic{figure}}
+
+\begin{table}[H]
+\centering\small
+\caption{Seller-script ladder (persuasion buyer seat): forward hit rate on the
+\emph{next} purchase, conditioned on what that exact message template has
+already delivered earlier in the same game (6{,}185 buyer replays). The 5.3\%
+row sits below the break-even bar $1/m$ in every cell, which is what makes the
+template veto strictly dominated.}
+\label{tab:ladder}
+\begin{tabular}{@{}lrlr@{}}
+\toprule
+Prior record of this template & hit rate & Prior record & hit rate \\
+\midrule
+no prior           & 70.4\% & all-low $\times1$ & 33.8\% \\
+all-high $\times1$ & 81.3\% & all-low $\times2$ & 19.3\% \\
+all-high $\times2$ & 84.8\% & all-low $\times3$ & \tbf{5.3\%} \\
+all-high $\times3$ & 91.2\% & mixed             & 63.7\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\input{fig_noise.tex}
+\caption{\tbf{Five byte-identical builds, 8.6\,h, 45 simultaneous polls,
+${\approx}3{,}000$ games each.} Band = min--max envelope per poll (mean spread
+48.1, max 88.0). Per family the same builds spread 136.8 / 161.8 / 109.8 points
+on average and 292.9 at peak, while their \emph{behaviour} differed by
+${\le}0.010$ of the pot.}
+\label{fig:noise}
+\end{figure}
+
+\begin{table}[H]
+\centering\small
+\caption{Fleet volume, 12--30 August 2026, recovered from the local turn logs.
+Only the account's best slot is ranked, which is what makes the other four
+available as simultaneous controls.}
+\label{tab:volume}
+\begin{tabular}{@{}lrlr@{}}
+\toprule
+Family & unique games & Fleet total & \\
+\midrule
+Bargaining  & 89{,}641 & logged turns         & 3{,}114{,}356 \\
+Negotiation & 76{,}490 & unique games         & 264{,}432 \\
+Persuasion  & 98{,}301 & reconstructable runs & 49 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Break-even recovery (technique C) over 7{,}104 known-horizon and
+31{,}208 open-horizon bargaining games. The whole bargaining deficit is one
+cell, and it is the accept side: replaying the shipped decision rule over
+26{,}773 logged decision points (98.79\% control fidelity) shows the stonewall
+term setting the bar as low as 0.118, so it signs 0.30--0.50 offers in the
+opening rounds.}
+\label{tab:breakeven}
+\begin{tabular}{@{}llrrrl@{}}
+\toprule
+Horizon & Seat & I bank & Field median & Gap & Diagnosis \\
+\midrule
+open     & $p_1$ & 0.530 & 0.476 & $+0.054$ & healthy \\
+open     & $p_2$ & 0.501 & 0.463 & $+0.038$ & healthy \\
+known 12 & $p_1$ & 0.435 & \tbf{0.816} & $\mathbf{-0.381}$ & accept bar collapses to 0.118 \\
+known 12 & $p_2$ & 0.687 & 0.449 & $+0.239$ & healthy \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Open-horizon bargaining: the field median is approximately Rubinstein
+SPE, and I sit under it in every player-1 cell (technique C, 38{,}312 games).
+The exception is $\delta_{\text{us}}{=}\delta_{\text{them}}{=}0.95$, where SPE
+is 0.513 but the field median is only 0.475, so demanding SPE there buys
+no-deals, which is why the shipped floor targets the measured field median
+rather than the equilibrium.}
+\label{tab:spe}
+\begin{tabular}{@{}rrrrrr@{}}
+\toprule
+$\delta_{\text{us}}$ & $\delta_{\text{them}}$ & mine & field median & SPE & gap \\
+\midrule
+0.95 & 0.80 & 0.712 & 0.825 & 0.833 & $-0.11$ \\
+0.95 & 0.90 & 0.536 & 0.625 & 0.690 & $-0.09$ \\
+0.90 & 0.80 & 0.595 & 0.675 & 0.714 & $-0.08$ \\
+0.90 & 0.90 & 0.449 & 0.525 & 0.526 & $-0.08$ \\
+1.00 & 0.90 & 0.692 & 0.775 & 1.000 & $-0.08$ \\
+0.80 & 0.80 & 0.477 & 0.525 & 0.556 & $-0.05$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Five of the six changes that replicated. Each removed a \emph{strictly
+dominated} choice, an option plainly worse than an available alternative with no
+trade-off to price. Nothing else did.}
+\label{tab:ledger}
+\begin{tabular}{@{}p{0.26\linewidth}p{0.70\linewidth}@{}}
+\toprule
+Change & Evidence \\
+\midrule
+Complete-info ultimatum & I was asking 0.650 of a \emph{known} surplus on the one round they cannot refuse; 0.99 was signable. $+3.42\sigma$, $n{=}214$ \\
+Rung-aware pricing & Price at the recovered valuation rungs, not guesses. $+3.9/{+}4.1\sigma$, replicated \\
+Free-clock accept floor & At $\delta{=}1$ refusing is costless. ${+}0.0458$ of pot, $n{=}108$, $7.7\sigma$, none worse \\
+Open-horizon cap collapse & The server zeroes both sides and never says so. Caught 11 of 11 \$0 games \\
+Negative-signal parser & 270 buys made against messages that read as refusals; \tbf{95.6\% low quality} against a 27.5\% base rate \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Bounded complete-information negotiation: the same seat under two
+horizons, over 10{,}740 games. Grinding to the last round is where the
+family's losses are, and deal rate cannot see it, because the round-10 dump
+\emph{is} a deal.}
+\label{tab:endgame}
+\begin{tabular}{@{}lrlr@{}}
+\toprule
+Cell / outcome & $n$ & banked / buyer value & rating\,/\,game \\
+\midrule
+$\text{max\_rounds}{=}1$, seller, complete info  & 488 & asks 0.991, signed 99.2\% & $\mathbf{+6.10}$ \\
+$\text{max\_rounds}{=}10$, seller, complete info & 469 & (split below) & $\mathbf{-4.63}$ \\
+\quad closed by round 8  & 66  & 0.2365 & $+5.9$ \\
+\quad ground to round 10 & 403 & \tbf{0.0433} & $\mathbf{-6.4}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Extended limitations}
+\label{app:lim}
+
+Three limitations were compressed out of \S7. \tbf{(i) The persuasion buyer seat
+admits no per-round counterfactual even in principle}: quality on declined rounds
+is never revealed, so technique (D) answers only the aggregate question ``am I
+leaking in this cell'', never ``should I have bought round~7''.
+\tbf{(ii) The offline simulator is optimistic.} I built a local bargaining
+engine (real rules, my seat played by the shipped code, the other seat by a
+field fitted to 15{,}788 real games plus eight adversarial archetypes). It
+reproduces per-cell median settlement rounds but scores ${\approx}{+}0.03$ of pot
+high, with a ${\pm}45$-rating noise floor per world at $n{=}4{,}000$, so I used
+it only to choose which arm deserved a live window and never shipped on it
+alone. \tbf{(iii) Operational failure modes cost me more than any strategy
+error.} Three recur: a deploy that writes arm flags back into the repository
+working tree (hit five times, and the reason 27 tests fail on my final-night
+tree); an entry point outside the copied package, so sibling agents silently ran
+stale code; and force-killing an agent mid-game, which abandons in-flight games
+at the 5th percentile and can trip a 30-minute queue ban. Draining with a
+deadline rather than a kill is the only safe stop.
+
+\tbf{(iv) Opponent modelling is stable but unreachable where it would pay.}
+\S8 reports split-half $r{=}0.786$ across the 19 opponent\,$\times$\,cell
+profiles with ${\ge}25$ purchases in both halves, which is real but is also the
+whole usable sample. Three things block the rest. Identity is withheld in
+49.9\% of games; the named half spreads 16{,}498 games over 227 opponents and
+15 cells, about five games per profile, and behaviour differs by cell so they
+cannot be pooled; and quality is redacted on every round I passed (0 of 42{,}616
+unbought rounds ever showed it), so a reputation table has \emph{zero} entries
+in precisely the cells where I buy nothing and most need one. That is why the
+shipped buyer reads the seller's rationing rate within the current game, which
+is visible whether or not I buy, instead of a cross-game profile.
+
+\section{A note on the Simpson's paradox I nearly shipped on}
+\label{app:simpson}
+
+A late candidate rule, ``take a recommendation only from a seller who has
+already spent a sale to decline one'', looked refuted when pooled across all
+fifteen $(m,p)$ cells: subsequent dud rates of 0.285 / 0.287 / 0.286 / 0.315
+for sellers who had declined 0 / 1 / 2 / 3--4 of their first four rounds. Split
+by cell it reverses and becomes monotone: inside $(m{=}1.20, p{=}0.80)$,
+$n{=}9{,}932$, the same buckets read 0.160 / 0.102 / 0.081 / \tbf{0.069}
+against a break-even of $1-1/m = 0.167$. The pooled number is dominated by easy
+cells where everyone buys everything regardless. I did not ship it, for the
+reason the rest of this paper argues: at 2.2\% of my games it was worth
+${\approx}{+}2.6$ rating points, far below what the remaining window could
+measure, and a fourth simultaneous change would have destroyed my ability to
+read the three already running.
+
+\section{Three properties of the scoring rule}
+\label{app:scoring}
+
+\tbf{The aggregate rewards balance, and I optimised the wrong object for two
+weeks.} Overall rank is the \emph{unweighted mean} of the three family ratings,
+and only an account's best slot is ranked. Judged per family, negotiation was my
+best return per game; judged per \emph{overall} point it was nearly worthless,
+because ${+}300$ more negotiation is ${+}100$ overall and hard, while ${+}180$ in
+each weak family is ${+}120$ and was what the arms already targeted. At the time
+I noticed, I sat 11th at 2301.5 with negotiation 2875 (4th best on the board) and
+bargaining 2021; the 4th-placed account held that same bargaining rating.
+\tbf{Nobody in the top ten was balanced}, which is the strongest structural
+incentive the scoring rule creates and the one I was slowest to see.
+
+\tbf{The reference pool defends itself against sabotage.} A natural worry is
+that spare agent slots could be spent depressing rivals' ratings. Besides being
+prohibited and trivially detectable, it is self-defeating on the mechanism:
+percentile is scored against payoffs earned on the same configuration, and
+competition games join that pool as they are played, so every no-deal forced on
+an opponent injects a bottom-of-distribution payoff that \emph{raises} the
+percentile of every normal payoff scored afterwards. Attacking the field inflates
+it. There is also no opponent selection anywhere in the API, so the damage would
+spray uniformly across the 227 opponents I faced.
+
+\tbf{The underlying data will come from the organisers rather than from me.}
+Every number here is computed from my own turn logs, which also carry the
+transcripts of the agents I was matched against, and those are not released
+alongside the code. The organisers have said they will publish the full game
+record for every agent, which supersedes anything I could have attached: it
+covers the whole field rather than one account, and it comes from the party that
+ran the games. The analysis scripts are released now, so the method can be
+audited ahead of the data it will run on.
+
+\tbf{The garden of forking paths is wide here.} One persuasion arm, analysed
+three defensible ways on the same data, read $-3.11\sigma$ across 3 cells,
+$-0.82\sigma$ across 33, and $+3.02\sigma$ across 44, depending only on the
+inclusion threshold for how many games a configuration needed to enter the
+sample. Pre-registering the cell filter before looking is not optional at this
+noise level.
+
+\end{document}

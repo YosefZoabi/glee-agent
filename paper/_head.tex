@@ -1,0 +1,142 @@
+% =====================================================================
+%  Below the Noise Floor
+%  GLEE Competition paper -- IAB Workshop, NeurIPS 2026
+%  Agent ID: 7aidara_Gamma  (agent track, 6th place)
+%
+%  BUILD
+%    Put the official neurips_2026.sty beside this file, then
+%      pdflatex glee_competition_paper   (twice)
+%    Without it the preamble falls back to a geometry-matched article
+%    class (5.5in x 9.0in text block) so the draft still compiles.
+%
+%  PAGE LIMIT
+%    Main body = pages 1-4, ending at \section{Conclusion}.
+%    References are unlimited. Everything after \appendix is
+%    SUPPLEMENTARY -- delete it if the chairs enforce "references only".
+% =====================================================================
+\documentclass{article}
+
+% `preprint` = non-anonymous (the competition track is single-blind) without the
+% camera-ready footer that `final` would print, since this is a workshop
+% competition-track submission and not a NeurIPS main-conference paper.
+\IfFileExists{neurips_2026.sty}{%
+  \usepackage[preprint]{neurips_2026}%
+}{%
+  % Same 5.5in x 9.0in text block, so a draft still paginates faithfully if the
+  % official style file is missing.
+  \usepackage[letterpaper,margin=1.5in,top=1.0in,bottom=1.0in]{geometry}
+  \usepackage{times}
+  \typeout{*** neurips_2026.sty not found -- fallback geometry in use ***}
+}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{float}
+
+\newcommand{\tbf}[1]{\textbf{#1}}
+\newcommand{\tsm}[1]{\texttt{\small #1}}
+
+% --- styles used by fig_noise.tex ------------------------------------
+\definecolor{c1c}{HTML}{2F6F8F}
+\definecolor{c2c}{HTML}{C2632B}
+\definecolor{c3c}{HTML}{6C8B3C}
+\definecolor{c4c}{HTML}{8B5E9C}
+\definecolor{c5c}{HTML}{B03A48}
+\definecolor{inkc}{HTML}{3A3A3A}
+\tikzset{
+  gridline/.style={draw=black!12,line width=0.35pt},
+  axline/.style={draw=black!45,line width=0.5pt},
+  axlab/.style={font=\scriptsize,text=black!60},
+  ptlab/.style={font=\scriptsize\bfseries},
+  note/.style={font=\scriptsize,text=inkc,inner sep=1pt},
+  band/.style={fill=black!7},
+  spreadarrow/.style={draw=inkc,line width=0.7pt,|<->|,>=stealth},
+  c1/.style={draw=c1c}, c2/.style={draw=c2c}, c3/.style={draw=c3c},
+  c4/.style={draw=c4c}, c5/.style={draw=c5c},
+}
+
+\title{Below the Noise Floor: A Deterministic GLEE Agent\\
+       and the Measurement Problem It Exposed}
+
+\author{%
+  Yosef Zoabi\\
+  \texttt{yosef.zoabi@campus.technion.ac.il}\\
+  \texttt{\small GLEE Agent ID \texttt{edb1db91303e} (7aidara\_Gamma)}\\
+  \texttt{\small Agent track: 6th place. Human track: \textbf{2nd place}.}
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+I competed in both GLEE tracks: as \textsc{7aidara\_Gamma}, a deterministic,
+LLM-free agent that finished \tbf{6th in the agent track} (2360.8) over
+\tbf{264{,}432 games and 3.11M logged turns}, and by hand, where I finished
+\tbf{2nd in the human track}. The agent is ${\approx}2{,}300$ lines of
+Python, one closed-form policy per family behind 114 parameters, with no learning
+and no language model. My central finding is methodological and negative:
+\tbf{GLEE's percentile-Elo cannot resolve the effects entrants are trying to
+produce}. Five \emph{byte-identical} builds, polled simultaneously for 8.6 hours
+over ${\approx}3{,}000$ games each, differed by up to 88 rating points overall and
+293 within a family, while their \emph{behaviour} differed by ${\le}0.010$ of the
+pot; separating two policies that differ by 0.25 rating points per game at
+$3\sigma$ needs ${\approx}5{,}600$--$6{,}700$ games \emph{per arm}. Across 30+
+interventions and 49 runs only \emph{strictly dominated} fixes ever replicated,
+every tuning arm measured nothing, and one unmeasured arm shipped fleet-wide cost
+100--385 negotiation points per agent. Much of what the policies rely on is not
+documented anywhere and had to be recovered from play: the valuation pool, an
+undisclosed round cap that pays both sides nothing, and the rating's own update
+rule. I give four offline techniques that measured what the leaderboard could
+not, a survivorship failure mode that silently corrupted four analyses, and a
+measurement of what abandoning games actually costs. Playing both tracks yields
+an unusually controlled human-versus-machine comparison, one designer and one
+shared opponent pool, which finds that agent and human read seller messages
+equally well (hit rate 0.738 vs.\ 0.725) and separate almost entirely on the
+discipline to decline.
+\end{abstract}
+
+\section{Introduction}
+
+GLEE~\cite{shapira2024glee}, in the lineage of automated negotiation
+competitions~\cite{anac2011,baarslag2014decoupling}, evaluates agents in three economic
+families: \emph{bargaining} (alternating-offer division with discounting),
+\emph{negotiation} (bilateral trade under private valuations~\cite{myerson1983}) and
+\emph{persuasion} (a 20-round sender--receiver game). Configurations come from a
+grid of 960 combinations, and payoff is scored not in dollars but as a
+\emph{percentile} against every payoff earned on the same configuration in the
+same role, adjusted for opponent strength:
+$r_{\text{game}} {=} 2000 + 8000(\text{pct}{-}0.5)$,
+$\Delta R {=} \eta(r_{\text{game}}{-}R)$, $\eta \to 0.002$.
+
+Two consequences shaped every decision. A \$0 no-deal sits at the bottom of that
+scale, so closing a mediocre deal strictly dominates holding out and missing. And
+the step size I recovered from my own rating deltas, $\eta{=}0.002$, implies an
+EMA half-life of ${\approx}346$ games \emph{per family}: the rating is a smoothed,
+lagged, opponent-contaminated statistic, and it is the only feedback the platform
+gives.
+
+I built a deterministic agent rather than an LLM one for three reasons. Percentile
+scoring over a known parametric family rewards a correct decision rule; the
+free-text channel measured as inert (\S\ref{sec:ledger}); and determinism buys
+what mattered most, namely that \tbf{a logged game replays to exactly the same
+decisions}, which made offline evaluation possible once I found that the
+leaderboard could not evaluate anything.
+
+One theme runs through what follows: \tbf{most of what the agent exploits is
+undocumented and had to be inferred from play}, so every such fact is stated with
+the evidence that recovered it. The paper also spans the workshop's three levels:
+what the agent did (\S\ref{sec:aba}), what I did facing the same games by hand
+(\S\ref{sec:human}), and where the two diverge. I contribute the agent
+(\S\ref{sec:agent}), a measurement of the competition's evaluation noise floor and
+the sample it implies (\S\ref{sec:noise}), four offline techniques that measure
+strategy changes without the leaderboard (\S\ref{sec:measure}), a ledger of what
+replicated and what cost me places (\S\ref{sec:ledger}), the required behaviour
+analysis (\S\ref{sec:aba}), and a same-author human baseline (\S\ref{sec:human}).

@@ -1,0 +1,229 @@
+\section{The agent, and what had to be discovered to build it}
+\label{sec:agent}
+
+A dispatcher routes each game by family to one of three closed-form
+policies\footnote{\tbf{LLM usage.} The agent contains no language model. I used an
+LLM coding assistant for analysis scripts and drafting under my direction, and
+verified every reported number against the logs.} (858 / 660 / 781
+lines), set by 114 tunables and covered by 472 behavioural tests. Any policy that
+raises is replaced by a legal fallback: abandonment scores at the \tbf{5th
+percentile} and three self-timeouts trigger a 30-minute queue ban, so a crashing
+policy is far worse than a mediocre one. No game in 264{,}432 was lost to an
+exception.
+
+\tbf{Bargaining} anchors on the infinite-horizon fixed point
+$(1{-}\delta_{\text{them}})/(1{-}\delta_{\text{us}}\delta_{\text{them}})$~\cite{rubinstein1982}
+rather than the finite recursion, which swings between ${\approx}0.24$ and
+${\approx}0.91$ with the horizon's \emph{parity} and is right only against an
+opponent playing the same equilibrium: the agent banks 0.364 where it says 0.236.
+Parity still buys a \emph{guarantee}, since if the last proposal is mine the agent
+can refuse everything and reach it, priced at what that seat empirically returns
+(91.9\% signed, $n{=}1{,}415$). It never walks away, since that pays what running
+out of rounds pays.
+
+\tbf{Negotiation} rests on a fact the documentation does not state. Sorting every
+valuation the server dealt me showed they are not continuous but drawn from three
+fixed four-rung pools, $(80,100,120,150)$ scaled by $\{1,10^2,10^4\}$, both
+players on the same scale. My own value therefore pins the whole ladder, so the
+agent prices at \emph{tradable rungs} walked from the top down instead of guessing
+a reservation price. Roles are drawn independently of values, so only 37.5\% of
+hidden-value games hold any surplus and a seat with none is walked at once.
+
+\tbf{Persuasion} rests on a second undocumented fact, verified over 1{,}829 sold
+rounds: the seller is paid the full price on \emph{every} sale, high or low, so
+reputation is the only currency. Bayesian persuasion~\cite{kamenica2011bayesian}
+then fixes the tolerable lie rate: recommending every high unit and a fraction $q$
+of low ones puts the buyer's posterior at $p/(p{+}(1{-}p)q)$, so
+$q^\star{=}p(1{-}\tau)/(\tau(1{-}p))$ for threshold $\tau$. The agent spends under
+it, ramping as rounds run out (Appendix Table~\ref{tab:ladder}). A
+third undocumented fact, found from a cluster of \$0 outcomes at high round
+numbers, reshaped both open-horizon policies: games sold as unlimited stop at a
+round cap paying \emph{both} sides nothing.
+
+\section{The measurement problem}
+\label{sec:noise}
+
+Because only an account's \emph{best} agent is ranked, my five slots could be
+spent as five simultaneous \emph{controls} rather than five experiments
+(Appendix Table~\ref{tab:volume}), which turns an unfalsifiable rating into a
+measured null. Polled together for 8.6 hours over ${\approx}3{,}000$ games each,
+five \tbf{byte-identical} builds spread a mean of 48.1 rating points and up to
+292.9 within a family, while their \emph{behaviour} differed by ${\le}0.010$ of
+the pot (Appendix Figure~\ref{fig:noise}).
+
+\tbf{The size of that noise is arithmetic.} The rating is an 80-fold
+magnification of a percentile, so with $\eta$ decayed the displayed rating inverts
+to $\mathrm{pct}{=}0.5+(R{-}2000)/8000$, evaluated where the field's payoff
+density is highest. A 346-point bargaining collapse was a move from the 51.8th
+percentile to the 47.4th, and the final board is compressed the same way:
+\tbf{ranks 3 to 7 of the agent track are separated by 0.41 percentile points},
+and the 10.5 rating points by which I missed 5th are 0.13 of one.
+Appendix~\ref{app:scoring} has three further properties of the rule.
+
+Two further properties compound it. The pool is \tbf{non-stationary}, since
+scoring is against the research dataset \emph{plus competition games as they are
+played}, so \emph{no cross-time comparison is valid}; and ratings \tbf{freeze when
+idle}, making the close a stopping problem. I banked $+83$ points by freezing an
+agent on a one-hour high, and on the final evening three of the four accounts
+above me had already stopped playing. Worse, \tbf{almost every run is
+underpowered}: the per-game rating delta has $\mathrm{sd}{=}4.84/4.42/4.44$ over
+120{,}023 games, so separating two arms differing by $\Delta$ at $3\sigma$ needs
+$n{=}(3\sigma\sqrt2/\Delta)^2$ games \emph{each}, or \tbf{6{,}743 / 5{,}632 /
+5{,}689 per arm at $\Delta{=}0.25$}, against effects of 0.05--0.20 and a best
+window of ${\approx}4{,}000$ games per agent.
+
+\section{Measuring without the leaderboard}
+\label{sec:measure}
+
+Four offline techniques carried essentially all my evidence, using only my own
+logs; the fourth, which recovers the quality rate on \emph{declined} rounds by
+subtraction from the known prior, is in Appendix~\ref{app:lim}.
+
+\tbf{(A) Paired within-game counterfactuals.} Accepting is \emph{unilateral and
+terminal}, so the other branch is arithmetic: signing now is exactly
+$\text{share}\times\delta^{(r-1)}$, which makes every refused offer its own
+control, with no survivorship. It gave a break-even accept bar per configuration
+from 23{,}617 refusals.
+
+\tbf{(B) Decision-level replay, as a mandatory pre-flight.} The turn logs re-run
+the shipped decision function exactly, reproducing \tbf{4{,}272 of 4{,}272}
+bargaining and \tbf{13{,}056 of 13{,}056} negotiation decisions with zero
+mismatches, so the replay \emph{is} the agent. Count the decisions a
+flag \emph{changes}, which is \emph{not} how often its condition fires: one arm's
+condition held on 43\% of eligible games and changed \tbf{0 of 13{,}056}
+decisions, another \tbf{0 of 13{,}479}.
+
+\tbf{(C) Break-even recovery.} $\Delta R$ is monotone in percentile, so the
+outcome at which mean $\Delta R$ crosses zero is the outcome ranking at my own
+standing, the field median when $R{\approx}2000$. Fitting $\Delta R$ on banked
+share within a configuration and taking the root uses \emph{every} game, \$0
+no-deals included, so there is no survivorship (slope positive in 58 of 64 cells,
+median $R^2{=}0.60$, split-half $r{=}0.741$). It localised my bargaining deficit
+to a single seat, and showed the loss there was the accept
+bar~\cite{baarslag2013acceptance}, not the opening ask. Across all 55 cells
+it also characterises the field: its median tracks Rubinstein SPE where that
+prediction is interior ($r{=}0.895$, mean gap 0.070 of pot) and abandons it where
+it is extreme (gap 0.281), taking \tbf{0.297} where theory says take nothing and
+\tbf{0.734} where it says take everything~\cite{ochsroth1989}. An equilibrium
+anchor is therefore miscalibrated at the grid's edges
+(Appendix Tables~\ref{tab:breakeven} and~\ref{tab:spe}).
+
+\tbf{The failure mode these replace.} Four analyses were wrong the same way:
+\tbf{the filter that built the sample already excluded every game that would have
+contradicted it} (Appendix~\ref{app:simpson}).
+
+\section{What worked, what failed, and what it cost}
+\label{sec:ledger}
+
+
+Six changes replicated, each removing a \emph{strictly dominated} choice, an
+option plainly worse than an available alternative (Appendix Table~\ref{tab:ledger}).
+
+\tbf{Nothing else replicated.} Seven consecutive tuning arms landed inside the
+noise floor, as did a seller lie-rate arm held at 100\% against 40\% controls
+across three runs ($t{=}{-}0.29$). \tbf{The most expensive mistake was mine}: on
+the final morning I shipped one negotiation concession parameter to \emph{all
+four} unfrozen agents at once and left it five hours before measuring. It cost
+\tbf{100--385 negotiation points per agent}, and I finished 10.5 points behind
+5th; one retained control would have caught it in an hour.
+
+\tbf{Abandoning games costs less than it appears to.} An abandoned game scores at
+the 5th percentile, and stopping a run kills what is in flight: I abandoned
+\tbf{80 of 109{,}881} rated games (0.073\%), 78 of them inside seven clock hours,
+at $-6.76$ rating points against $+0.17$ for a game played out. The steps sum to
+$-541$, but the rating is an EMA, so the persistent shift is about \tbf{0.5
+points}; the close is the exception, where nothing is averaged away.
+
+\tbf{My two best changes came from reading transcripts, not aggregates.} One is a
+parser bug: purchases made against messages saying, in plain English, ``\emph{Not
+this one\dots pass this round.}'' The refusal list held \tsm{"not this round"} but
+not \tsm{"not this one"}, and such near-misses fell through a default branch that
+read anything unmatched as a recommendation. Re-scoring 123{,}700 buyer rounds,
+270 of the re-classified rounds were purchases and \tbf{258 of them were low
+quality}. The other was a 96-round stall showing that my acceptance gate opened at
+round 97 in games the server killed at 96. A third reading settled the
+architecture: \tbf{language was inert}, the free-text channel moving buyer take-up
+only from 0.689 to 0.693~\cite{crawford1982strategic}.
+
+\section{Agent Behavior Analysis}
+\label{sec:aba}
+
+\paragraph{What the agent actually did.} Bargaining settled at median round 2 with
+a 1.5\% no-deal rate, banking 0.429 of the pot. Negotiation correctly walked
+79.8\% of untradable seats, and agreed 20--24\% under hidden values against
+85--89\% under complete information. The persuasion buyer shows the intended
+discontinuity: 17.4 purchases per game where buying blind pays, 2.2 where it does
+not, and the patient-hold gate fires on \tbf{60.7\%} of player-1
+$\delta{=}0.95$ decisions against \tbf{0.0\%} of player-2 $\delta{=}1.0$.
+
+\paragraph{How alignment is enforced.} The 472 tests assert the decision the
+policy must make in a named regime rather than a utility: at HEAD all pass, while
+the final night's working tree, still carrying that run's arm flags, fails 27,
+each naming the behaviour its flag changed. Randomisation is seeded from
+\tsm{(game\_id, round)}, so the agent is a pure function of observed state, and
+technique (B) reproduces 100\% of 17{,}328 logged decision points.
+
+\paragraph{Four cases where it did \emph{not} match design.} \tbf{(1) Rules that
+could never fire}: three flags changed zero decisions or were unreachable, so
+intent and behaviour were different things. \tbf{(2) A safety valve keyed to the
+wrong horizon}: my accept collapse armed two rounds from a cap recorded as 99, in
+a family whose games died at 96, so it never fired and 78.8\% of open negotiations
+ended at \$0. \tbf{(3) A parser whose default was the wrong way round}, which made
+the failure silent. \tbf{(4) A schedule that met its target and lost anyway}: 86\%
+of games ground to the last round and dumped for \emph{any} positive profit at
+$-6.4$ rating per game, which deal rate could not see because the capitulation
+\emph{is} a deal (Appendix Table~\ref{tab:endgame}).
+
+\section{A same-author human baseline}
+\label{sec:human}
+
+\begin{table}[htbp]
+\centering\footnotesize
+\caption{Human versus agent on identical configurations. Bargaining: mean banked
+share, known horizon. Persuasion: buyer seat, by whether buying \emph{blind} pays.}
+\label{tab:human}
+\begin{tabular}{@{}lrrr@{\hspace{1.5em}}lrrr@{}}
+\toprule
+\multicolumn{4}{@{}c}{\tbf{Bargaining (known horizon)}} &
+\multicolumn{4}{c@{}}{\tbf{Persuasion (buyer seat)}} \\
+\cmidrule(r{1.5em}){1-4} \cmidrule(l){5-8}
+seat & cells & human & agent & regime & human & agent & $t$ \\
+\midrule
+player 1 (first mover) & 14 & 0.444 & 0.447 & $mp{>}1$ (blind gain) & $+24.22$ & $+22.10$ & $+1.31$ \\
+player 2 (last word) & 13 & 0.512 & \tbf{0.720} & $mp{=}1$ (knife edge) & $+2.99$ & $+2.56$ & $+0.56$ \\
+ & & & & $mp{<}1$ (blind loss) & $-0.61$ & \tbf{$+0.18$} & $-2.44$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+I also played the \emph{human} track by hand and finished \tbf{2nd} over 2{,}690
+rated games against the same pool. Reconstructed from per-game deltas my ratings
+were 2437\,/\,2406\,/\,2170 against the agent's 2128\,/\,2818\,/\,2136; since the
+tracks rank separately I rest the analysis on \emph{matched configurations}
+(Table~\ref{tab:human}).
+
+\tbf{(1) Agent and human read sellers equally well}: hit rate on purchases 0.738
+over 2{,}745 for me, 0.725 over 59{,}603 for the agent, so the intuition that a
+person reads deception better than a keyword list is unsupported. \tbf{(2) The
+machine's edge is patience, and the seat it unlocks}: holding the final proposal
+it banks 0.720 of the pot against my 0.512, and refusing was correct in
+\tbf{96.5\%} of its 13{,}180 measurable games against \tbf{70.4\%} of my 455. In
+the first-mover seat the two are level. \tbf{(3) My cost is discipline, not
+perception}: where participation does not pay I still buy 8.4 units per game in
+cells the agent declines ($t{=}{-}2.44$), and banking zero costs only $-0.04$ to
+$-3.15$ points where a \emph{negative} payoff costs $-4.96$ to $-7.65$.
+
+\section{Limitations, reproducibility, and conclusion}
+
+Every number here is confounded by a non-stationary pool and by one account in one
+competition; technique (C) assumes $\Delta R$ is locally linear; and the human
+sample is one person. The largest gap is \tbf{cross-game
+memory}~\cite{baarslag2016survey}: honesty profiles are stable (split-half
+$r{=}0.786$) but exploiting them needs state the architecture lacks
+(Appendix~\ref{app:lim}). Much of the edge came from undocumented facts recovered
+from my own logs, a reproducibility hazard as much as an advantage; the agent
+itself is reproducible, being three modules, one parameter file, 472 offline
+tests, and every turn logged. Four lessons remain: \tbf{measure your noise floor
+first}; \tbf{prefer strictly dominated fixes}; \tbf{replay before you run};
+\tbf{read transcripts}. A leaderboard is a scoreboard, not an instrument.
+

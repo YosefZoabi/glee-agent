@@ -1,7 +1,37 @@
+# --- secrets -----------------------------------------------------------
+# The GLEE API key lives in .env and must never be committed. See
+# .env.example for the variable name.
 .env
+.env.*
+!.env.example
+
+# --- competition data --------------------------------------------------
+# Turn logs and history exports contain other competitors' game transcripts
+# and messages. They are the evidence base for the paper; the organizers will
+# publish the full game record for every agent.
 logs/
+glee-*.json
+*.jsonl
+scratchpad/
+
+# --- python ------------------------------------------------------------
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
 venv/
+
+# --- latex build artifacts (paper/build.py regenerates these) ----------
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.synctex.gz
+paper/glee_competition_paper.log
+
+# --- editor / tooling local state --------------------------------------
+.claude/
+*.bak
+.DS_Store

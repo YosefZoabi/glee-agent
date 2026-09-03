@@ -10,7 +10,7 @@ The MIT terms in [LICENSE](LICENSE) cover the **software** in this repository:
 
 They do **not** cover the paper. "Below the Noise Floor: A Deterministic GLEE
 Agent and the Measurement Problem It Exposed" — its PDF, its LaTeX sources
-(`paper/_head.tex`, `paper/_body.tex`, `paper/_tail.tex`, `paper/refs.bib`,
+(`paper/_head.tex`, `paper/_body.tex`, `paper/_tail.tex`,
 `paper/fig_noise.tex`, `paper/glee_competition_paper.tex`) and the change
 register (`paper/change-register.html`) — remains Copyright (c) 2026 Yosef
 Zoabi, all rights reserved. It is included so that readers of the paper can

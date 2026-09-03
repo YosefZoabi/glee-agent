@@ -31,8 +31,6 @@
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage{hyperref}
-\usepackage{url}
 \usepackage{booktabs}
 \usepackage{amsfonts}
 \usepackage{amsmath}
@@ -40,6 +38,22 @@
 \usepackage{xcolor}
 \usepackage{tikz}
 \usepackage{float}
+
+% hyperref must be loaded LAST so it can patch the packages above; it also
+% provides \url, so the separate url package is not needed. Neither the NeurIPS
+% style nor this preamble configured it before, which left every citation and
+% cross-reference a link with no visible affordance: clickable in principle, but
+% invisible and only as wide as the bracketed number.
+\usepackage{hyperref}
+\definecolor{linknavy}{HTML}{1F3A68}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=linknavy,
+  citecolor=linknavy,
+  urlcolor=linknavy,
+  pdftitle={Below the Noise Floor: A Deterministic GLEE Agent and the Measurement Problem It Exposed},
+  pdfauthor={Yosef Zoabi},
+}
 
 \newcommand{\tbf}[1]{\textbf{#1}}
 \newcommand{\tsm}[1]{\texttt{\small #1}}

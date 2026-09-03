@@ -123,11 +123,14 @@ Persuasion  & 98{,}301 & reconstructable runs & 49 \\
 cell, and it is the accept side: replaying the shipped decision rule over
 26{,}773 logged decision points (98.79\% control fidelity) shows the stonewall
 term setting the bar as low as 0.118, so it signs 0.30--0.50 offers in the
-opening rounds.}
+opening rounds. \tbf{Break-even} is the outcome at which mean $\Delta R$ crosses
+zero, which is the outcome ranking at my \emph{own} standing $R_t$; it equals the
+field median only where $R_t{\approx}2000$, which holds in these cells but should
+not be read as a field median in general.}
 \label{tab:breakeven}
 \begin{tabular}{@{}llrrrl@{}}
 \toprule
-Horizon & Seat & I bank & Field median & Gap & Diagnosis \\
+Horizon & Seat & I bank & Break-even & Gap & Diagnosis \\
 \midrule
 open     & $p_1$ & 0.530 & 0.476 & $+0.054$ & healthy \\
 open     & $p_2$ & 0.501 & 0.463 & $+0.038$ & healthy \\
@@ -201,10 +204,14 @@ $\text{max\_rounds}{=}10$, seller, complete info & 469 & (split below) & $\mathb
 \section{Extended limitations}
 \label{app:lim}
 
-Three limitations were compressed out of \S7. \tbf{(i) The persuasion buyer seat
+Three limitations were compressed out of \S8. \tbf{(i) The persuasion buyer seat
 admits no per-round counterfactual even in principle}: quality on declined rounds
-is never revealed, so technique (D) answers only the aggregate question ``am I
-leaking in this cell'', never ``should I have bought round~7''.
+is never revealed. Technique (D) recovers it by subtraction instead. With a known
+prior $p$ of high quality, a bought fraction $b$ of rounds and a realised hit rate
+$h$ on those, the quality rate on the rounds I passed is
+$q_{\text{declined}}{=}(p-bh)/(1-b)$, since the two strata must reconstitute the
+prior. That answers only the aggregate question ``am I leaking in this cell'',
+never ``should I have bought round~7''.
 \tbf{(ii) The offline simulator is optimistic.} I built a local bargaining
 engine (real rules, my seat played by the shipped code, the other seat by a
 field fitted to 15{,}788 real games plus eight adversarial archetypes). It
@@ -233,6 +240,11 @@ is visible whether or not I buy, instead of a cross-game profile.
 
 \section{A note on the Simpson's paradox I nearly shipped on}
 \label{app:simpson}
+
+Four analyses failed this way. Worked through here is the one that came closest
+to shipping; the others were a closed-game deal rate, a buyer-quality rate, and
+an abandonment cost, each of which conditioned its denominator on the very
+outcome it was trying to measure.
 
 A late candidate rule, ``take a recommendation only from a seller who has
 already spent a sale to decline one'', looked refuted when pooled across all

@@ -85,7 +85,7 @@ from 23{,}617 refusals.
 \tbf{(B) Decision-level replay, as a mandatory pre-flight.} The turn logs re-run
 the shipped decision function exactly, reproducing \tbf{4{,}272 of 4{,}272}
 bargaining and \tbf{13{,}056 of 13{,}056} negotiation decisions with zero
-mismatches, so the replay \emph{is} the agent. Count the decisions a
+mismatches. Count the decisions a
 flag \emph{changes}, which is \emph{not} how often its condition fires: one arm's
 condition held on 43\% of eligible games and changed \tbf{0 of 13{,}056}
 decisions, another \tbf{0 of 13{,}479}.
@@ -96,12 +96,14 @@ standing, the field median when $R{\approx}2000$. Fitting $\Delta R$ on banked
 share within a configuration and taking the root uses \emph{every} game, \$0
 no-deals included, so there is no survivorship (slope positive in 58 of 64 cells,
 median $R^2{=}0.60$, split-half $r{=}0.741$). It localised my bargaining deficit
-to a single seat, and showed the loss there was the accept
+to a single seat, and the loss there was the accept
 bar~\cite{baarslag2013acceptance}, not the opening ask. Across all 55 cells
-it also characterises the field: its median tracks Rubinstein SPE where that
+it also characterises the field: break-even tracks Rubinstein SPE where that
 prediction is interior ($r{=}0.895$, mean gap 0.070 of pot) and abandons it where
 it is extreme (gap 0.281), taking \tbf{0.297} where theory says take nothing and
-\tbf{0.734} where it says take everything~\cite{ochsroth1989}. (Appendix Tables~\ref{tab:breakeven} and~\ref{tab:spe}).
+\tbf{0.734} where it says take everything~\cite{ochsroth1989}, so an equilibrium
+anchor is miscalibrated at the grid's edges (Appendix
+Tables~\ref{tab:breakeven} and~\ref{tab:spe}).
 
 \tbf{The failure mode these replace.} Four analyses were wrong the same way:
 \tbf{the filter that built the sample already excluded every game that would have
@@ -111,7 +113,7 @@ contradicted it} (Appendix~\ref{app:simpson}).
 \label{sec:ledger}
 
 
-Five changes replicated, by which I mean they held at ${\ge}3\sigma$ or across two
+Six changes replicated, by which I mean they held at ${\ge}3\sigma$ or across two
 independent runs. Each removed a \emph{strictly dominated} choice (Appendix Table~\ref{tab:ledger}).
 
 \tbf{Nothing else did.} Seven consecutive tuning arms landed inside the
@@ -135,8 +137,8 @@ this one\dots pass this round.}'' The refusal list held \tsm{"not this round"} b
 not \tsm{"not this one"}, and such near-misses fell through a default branch that
 read anything unmatched as a recommendation. Re-scoring 123{,}700 buyer rounds,
 270 of the re-classified rounds were purchases and \tbf{258 of them were low
-quality}. The other was a 96-round stall showing that my acceptance gate opened at
-round 97 in games the server killed at 96. A third reading settled the
+quality}. The other was a 96-round stall exposing an acceptance gate that opened too
+late to fire. A third reading settled the
 architecture: I could detect \tbf{no effect of language}, the free-text channel
 moving buyer take-up only from 0.689 to 0.693, against a cheap-talk literature
 that expects informative equilibria to be fragile~\cite{crawford1982strategic}.
@@ -163,8 +165,7 @@ technique (B) reproduces 100\% of 17{,}328 logged decision points.
 could never fire}: three flags changed zero decisions or were unreachable. \tbf{(2) A safety valve keyed to the
 wrong horizon}: my accept collapse armed two rounds from a cap recorded as 99, in
 a family whose games died at 96, so it never fired and 78.8\% of open negotiations
-ended at \$0. \tbf{(3) A parser whose default was the wrong way round}, which made
-the failure silent. \tbf{(4) A schedule that met its target and lost anyway}: 86\%
+ended at \$0. \tbf{(3) A parser whose default was the wrong way round}. \tbf{(4) A schedule that met its target and lost anyway}: 86\%
 of games ground to the last round and dumped for \emph{any} positive profit at
 $-6.4$ rating per game, which deal rate could not see because the capitulation
 \emph{is} a deal (Appendix Table~\ref{tab:endgame}).
@@ -176,8 +177,8 @@ $-6.4$ rating per game, which deal rate could not see because the capitulation
 \centering\footnotesize
 \caption{Human versus agent on matched configurations; \emph{observational},
 not randomised. Bargaining: mean banked share of pot. Persuasion: mean payoff
-per game in product-price units. $t$: Welch's, signed human${-}$agent, so
-negative favours the agent; $n{=}455$--2{,}745 human, 13{,}180--59{,}603 agent.}
+per game in product-price units. $t$: Welch's, signed human${-}$agent, so negative favours the agent; $n{=}48$--92 human
+and 4{,}729--9{,}467 agent games per row.}
 \label{tab:human}
 \begin{tabular}{@{}lrrr@{\hspace{1.5em}}lrrr@{}}
 \toprule
@@ -198,11 +199,11 @@ rated games against the same pool, out-rating the agent in two of the three
 families. Since the tracks rank separately I rest the analysis on \emph{matched
 configurations} (Table~\ref{tab:human}).
 
-\tbf{(1) No detectable difference in reading sellers.} The pooled hit rate on
-purchases is 0.738 over 2{,}745 for me and 0.725 over 59{,}603 for the agent, but
-that gap is cell mix: standardised over the 13 shared $(m,p)$ cells it is
-\tbf{0.742 against 0.741}, 95\% CI $[-0.033,+0.032]$. To within ${\approx}3$
-points, a person does not read deception better than a keyword list. \tbf{(2) The
+\tbf{(1) No detectable difference in reading sellers.} The pooled hit rate on purchases
+(0.738 over 2{,}745 for me, 0.725 over 59{,}603 for the agent) is cell mix:
+standardised equally over the 13 shared $(m,p)$ cells it is \tbf{0.715 against
+0.722}, cell-bootstrap 95\% CI $[-0.050,+0.035]$, and $+0.001$ under purchase
+weighting. The sign is not robust to the weighting; the null is. \tbf{(2) The
 machine's edge is patience, and the seat it unlocks}: holding the final proposal
 it banks 0.720 of the pot against my 0.512, and refusing was correct in
 \tbf{96.5\%} of its 13{,}180 measurable games against \tbf{70.4\%} of my 455. In
@@ -213,13 +214,13 @@ $-3.15$ points where a \emph{negative} payoff costs $-4.96$ to $-7.65$.
 
 \section{Limitations, reproducibility, and conclusion}
 
-Every number here is confounded by a non-stationary pool and by one account in one
-competition; technique (C) assumes $\Delta R$ is locally linear; and the human
+Every performance estimate here is confounded by a non-stationary pool and by
+one account in one competition; technique (C) assumes $\Delta R$ is locally linear; and the human
 sample is one person. The largest gap is \tbf{cross-game
 memory}~\cite{baarslag2016survey}: honesty profiles are stable (split-half
 $r{=}0.786$) but exploiting them needs state the architecture lacks
-(Appendix~\ref{app:lim}). Much of the edge came from undocumented facts recovered
-from my own logs, a reproducibility hazard as much as an advantage; the agent
+(Appendix~\ref{app:lim}). Much of the edge came from undocumented facts in my own
+logs, a reproducibility hazard as much as an advantage; the agent
 itself is reproducible: three modules, one parameter file, 472 tests, every turn
 logged. Four lessons remain: \tbf{measure your noise floor
 first}; \tbf{prefer strictly dominated fixes}; \tbf{replay before you run};

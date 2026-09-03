@@ -142,16 +142,17 @@ known 12 & $p_2$ & 0.687 & 0.449 & $+0.239$ & healthy \\
 
 \begin{table}[H]
 \centering\small
-\caption{Open-horizon bargaining: the field median is approximately Rubinstein
-SPE, and I sit under it in every player-1 cell (technique C, 38{,}312 games).
-The exception is $\delta_{\text{us}}{=}\delta_{\text{them}}{=}0.95$, where SPE
-is 0.513 but the field median is only 0.475, so demanding SPE there buys
-no-deals, which is why the shipped floor targets the measured field median
-rather than the equilibrium.}
+\caption{Open-horizon bargaining: the break-even outcome tracks Rubinstein SPE,
+and I sit under it in every player-1 cell (technique C, 38{,}312 games). The
+exception is $\delta_{\text{us}}{=}\delta_{\text{them}}{=}0.95$, where SPE is
+0.513 but break-even is only 0.475, so demanding SPE there buys no-deals, which
+is why the shipped floor targets the measured value rather than the equilibrium.
+As in Table~\ref{tab:breakeven}, break-even reads as a field median only where
+$R_t{\approx}2000$.}
 \label{tab:spe}
 \begin{tabular}{@{}rrrrrr@{}}
 \toprule
-$\delta_{\text{us}}$ & $\delta_{\text{them}}$ & mine & field median & SPE & gap \\
+$\delta_{\text{us}}$ & $\delta_{\text{them}}$ & mine & break-even & SPE & gap \\
 \midrule
 0.95 & 0.80 & 0.712 & 0.825 & 0.833 & $-0.11$ \\
 0.95 & 0.90 & 0.536 & 0.625 & 0.690 & $-0.09$ \\
@@ -165,9 +166,9 @@ $\delta_{\text{us}}$ & $\delta_{\text{them}}$ & mine & field median & SPE & gap 
 
 \begin{table}[H]
 \centering\small
-\caption{Five of the six changes that replicated. Each removed a \emph{strictly
-dominated} choice, an option plainly worse than an available alternative with no
-trade-off to price. Nothing else did.}
+\caption{Five of the six changes that replicated, the sixth omitted for space.
+Each removed a \emph{strictly dominated} choice, an option plainly worse than an
+available alternative with no trade-off to price. Nothing else did.}
 \label{tab:ledger}
 \begin{tabular}{@{}p{0.26\linewidth}p{0.70\linewidth}@{}}
 \toprule
@@ -208,9 +209,9 @@ Three limitations were compressed out of \S8. \tbf{(i) The persuasion buyer seat
 admits no per-round counterfactual even in principle}: quality on declined rounds
 is never revealed. Technique (D) recovers it by subtraction instead. With a known
 prior $p$ of high quality, a bought fraction $b$ of rounds and a realised hit rate
-$h$ on those, the quality rate on the rounds I passed is
-$q_{\text{declined}}{=}(p-bh)/(1-b)$, since the two strata must reconstitute the
-prior. That answers only the aggregate question ``am I leaking in this cell'',
+$h$ on those, the quality rate on the rounds I passed is estimated by
+$\widehat{q}_{\text{declined}}{=}(p-bh)/(1-b)$, since the two strata must
+reconstitute the prior in expectation. That answers only the aggregate question ``am I leaking in this cell'',
 never ``should I have bought round~7''.
 \tbf{(ii) The offline simulator is optimistic.} I built a local bargaining
 engine (real rules, my seat played by the shipped code, the other seat by a

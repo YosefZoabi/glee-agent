@@ -108,20 +108,20 @@ methodological and negative: \tbf{within the windows a competitor actually gets,
 GLEE's percentile-Elo could not resolve the effects I was trying to produce}.
 Five \emph{byte-identical} builds, polled simultaneously over ${\approx}3{,}000$
 games each, differed by up to 88 rating points overall and 293 within a family
-while their \emph{behaviour} differed by ${\le}0.010$ of the pot; separating two
-policies 0.25 rating points per game apart at $3\sigma$ needs
+while their \emph{behaviour} differed by ${\le}0.010$ of the pot; separating
+policies 0.25 points per game apart at $3\sigma$ needs
 ${\approx}5{,}600$--$6{,}700$ games \emph{per arm}. Across 30+ interventions and
 49 runs only \emph{strictly dominated} fixes replicated, every tuning arm
 measured nothing, and one unmeasured arm shipped fleet-wide cost 100--385
 negotiation points per agent. Much of what the policies rely on is documented
-nowhere and had to be recovered from play: the valuation pool, a round cap that
-pays both sides nothing, and the rating's own update rule. I give four offline
-techniques that measured what the leaderboard could not, and a survivorship
-failure mode that silently corrupted four analyses. Playing both tracks also
-yields a well matched \emph{observational} human-versus-machine comparison, in
-which agent and human read seller messages with no difference I can detect
-(cell-standardised hit rates 0.742 vs.\ 0.741, 95\% CI $[-0.033,+0.032]$) and
-separate almost entirely on the discipline to decline.
+nowhere and had to be recovered from play: the valuation pool, a round cap paying
+both sides nothing, and the rating's update rule. I give four offline techniques
+that measured what the leaderboard could not, and a survivorship failure mode
+that corrupted four analyses. Playing both tracks also
+yields a well-matched \emph{observational} human-machine comparison: agent and
+human read seller messages with no difference I can detect (equal-cell hit rates
+0.715 vs.\ 0.722, 95\% CI $[-0.050,+0.035]$), separating almost entirely on the
+discipline to decline.
 \end{abstract}
 
 \section{Introduction}
@@ -146,10 +146,10 @@ gives.
 
 I built a deterministic agent rather than an LLM one for three reasons. Percentile
 scoring over a known parametric family rewards a correct decision rule; the
-free-text channel measured as inert (\S\ref{sec:ledger}); and determinism buys
+free-text channel showed no detectable effect (\S\ref{sec:ledger}); and determinism buys
 what mattered most, namely that \tbf{a logged game replays to exactly the same
 decisions}, which made offline evaluation possible once I found that the
-leaderboard could not evaluate anything.
+leaderboard could not resolve the effects examined here.
 
 One theme runs through what follows: \tbf{most of what the agent exploits is
 undocumented and had to be inferred from play}, so every such fact is stated with
@@ -159,4 +159,4 @@ measurement of the competition's noise floor and the sample it implies
 without the leaderboard (\S\ref{sec:measure}), a ledger of what replicated and
 what cost me places (\S\ref{sec:ledger}), the required behaviour analysis
 (\S\ref{sec:aba}), and an observational same-author baseline facing the same
-games by hand (\S\ref{sec:human}).
+configurations by hand (\S\ref{sec:human}).

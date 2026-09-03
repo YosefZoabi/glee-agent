@@ -19,22 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----------------------------------------------------------------------------
-
-SCOPE
-
-The MIT terms above cover the software in this repository: the agent
-(`glee_agent/`), its tests (`tests/`), the tooling (`tools/`), and the analysis
-scripts (`paper/analysis/`).
-
-They do NOT cover the paper itself. "Below the Noise Floor: A Deterministic
-GLEE Agent and the Measurement Problem It Exposed" -- its PDF, its LaTeX
-sources (`paper/_head.tex`, `paper/_body.tex`, `paper/_tail.tex`,
-`paper/refs.bib`, `paper/fig_noise.tex`), and the change register
-(`paper/change-register.html`) -- remains Copyright (c) 2026 Yosef Zoabi, all
-rights reserved. It is included here so readers of the paper can audit the work
-behind it. Quote it as you would any paper, under normal academic citation.
-
-`paper/neurips_2026.sty` is the official NeurIPS 2026 style file, redistributed
-unmodified under its own terms, and is not covered by either of the above.

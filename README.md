@@ -171,4 +171,4 @@ whole field rather than for one account.
 ## License
 
 MIT for the code. The paper and the change register stay my copyright. See
-[LICENSE](LICENSE) for exactly which files fall under which.
+[NOTICE](NOTICE) for exactly which files fall under which.

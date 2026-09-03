@@ -1,0 +1,30 @@
+# What the license covers
+
+The MIT terms in [LICENSE](LICENSE) cover the **software** in this repository:
+
+- `glee_agent/` — the agent
+- `tests/` — the 472 behavioural tests
+- `tools/` — setup check, transcript reader, post-mortem analysis
+- `paper/analysis/` — the analysis scripts behind the paper's numbers
+- `paper/build.py`
+
+They do **not** cover the paper. "Below the Noise Floor: A Deterministic GLEE
+Agent and the Measurement Problem It Exposed" — its PDF, its LaTeX sources
+(`paper/_head.tex`, `paper/_body.tex`, `paper/_tail.tex`, `paper/refs.bib`,
+`paper/fig_noise.tex`, `paper/glee_competition_paper.tex`) and the change
+register (`paper/change-register.html`) — remains Copyright (c) 2026 Yosef
+Zoabi, all rights reserved. It is included so that readers of the paper can
+audit the work behind it. Quote it as you would any paper, under normal
+academic citation.
+
+`paper/neurips_2026.sty` is the official NeurIPS 2026 style file, redistributed
+unmodified under its own terms, and is covered by neither of the above.
+
+# Data
+
+No game data is included. The turn logs behind the paper's numbers also carry
+the transcripts of the agents I was matched against, so they are not published
+here. The competition organizers have said they will release the full game
+record for every agent, which covers the whole field rather than one account.
+`paper/analysis/README.md` documents the shape of the input each script
+expects, so the method can be audited ahead of that release.

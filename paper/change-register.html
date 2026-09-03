@@ -1,0 +1,737 @@
+<title>GLEE Change Register</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+
+<style>
+  :root {
+    --paper:      #EEF1F5;
+    --surface:    #FFFFFF;
+    --surface-2:  #F6F8FA;
+    --ink:        #18202D;
+    --ink-soft:   #3D4959;
+    --muted:      #67738A;
+    --rule:       #D9DFE8;
+    --accent:     #2F5D8C;
+    --accent-dim: #7C99B8;
+
+    --live:       #14705A;
+    --live-bg:    #DFF0EA;
+    --parked:     #8A5D10;
+    --parked-bg:  #F6EBD5;
+    --dead:       #99303F;
+    --dead-bg:    #F6E0E3;
+    --open:       #46536A;
+    --open-bg:    #E5E9F0;
+
+    --shadow: 0 1px 2px rgba(24,32,45,.06), 0 4px 16px rgba(24,32,45,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #10151D;
+      --surface:    #182029;
+      --surface-2:  #1E2733;
+      --ink:        #E4E9F0;
+      --ink-soft:   #BFC8D6;
+      --muted:      #8D99AC;
+      --rule:       #2B3542;
+      --accent:     #86ADD6;
+      --accent-dim: #4C6A8C;
+
+      --live:       #5CC7A4;
+      --live-bg:    #16302A;
+      --parked:     #D9A64F;
+      --parked-bg:  #322715;
+      --dead:       #E58A96;
+      --dead-bg:    #331A1F;
+      --open:       #9FADC2;
+      --open-bg:    #222B37;
+
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:      #10151D;
+    --surface:    #182029;
+    --surface-2:  #1E2733;
+    --ink:        #E4E9F0;
+    --ink-soft:   #BFC8D6;
+    --muted:      #8D99AC;
+    --rule:       #2B3542;
+    --accent:     #86ADD6;
+    --accent-dim: #4C6A8C;
+
+    --live:       #5CC7A4;
+    --live-bg:    #16302A;
+    --parked:     #D9A64F;
+    --parked-bg:  #322715;
+    --dead:       #E58A96;
+    --dead-bg:    #331A1F;
+    --open:       #9FADC2;
+    --open-bg:    #222B37;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 24px 96px; }
+
+  /* ---------- masthead ---------- */
+  header.mast { border-bottom: 2px solid var(--ink); padding-bottom: 20px; margin-bottom: 8px; }
+  .kicker {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 10px;
+  }
+  h1 {
+    font-family: "Instrument Serif", Georgia, serif;
+    font-weight: 400; font-size: clamp(38px, 6vw, 60px);
+    line-height: 1.02; margin: 0 0 12px; letter-spacing: -.01em;
+    text-wrap: balance;
+  }
+  .standfirst { color: var(--ink-soft); max-width: 62ch; margin: 0; font-size: 16px; }
+
+  /* ---------- tally ---------- */
+  .tally { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 30px; }
+  .tally button {
+    font: 500 12px/1 "IBM Plex Mono", monospace;
+    letter-spacing: .04em;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 13px; border-radius: 2px; cursor: pointer;
+    background: var(--surface); color: var(--ink-soft);
+    border: 1px solid var(--rule);
+    transition: border-color .12s, color .12s;
+  }
+  .tally button:hover { border-color: var(--accent-dim); color: var(--ink); }
+  .tally button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tally button[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); background: var(--surface-2); }
+  .tally .n { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .dot.live { background: var(--live); }
+  .dot.parked { background: var(--parked); }
+  .dot.dead { background: var(--dead); }
+  .dot.open { background: var(--open); }
+  .dot.all { background: var(--accent); }
+
+  /* ---------- sections ---------- */
+  section { margin: 44px 0 0; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; border-bottom: 1px solid var(--rule); padding-bottom: 8px; margin-bottom: 20px; }
+  .sec-head h2 {
+    font-family: "Instrument Serif", Georgia, serif;
+    font-weight: 400; font-size: 30px; margin: 0; letter-spacing: -.01em;
+  }
+  .sec-head .rating {
+    font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted);
+    font-variant-numeric: tabular-nums; margin-left: auto; text-align: right;
+  }
+
+  /* ---------- entries ---------- */
+  .entry {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--open);
+    border-radius: 2px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+  }
+  .entry[data-status="live"]   { border-left-color: var(--live); }
+  .entry[data-status="parked"] { border-left-color: var(--parked); }
+  .entry[data-status="dead"]   { border-left-color: var(--dead); }
+  .entry[data-status="open"]   { border-left-color: var(--open); }
+  .entry.hide { display: none; }
+
+  .etop { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .etop h3 {
+    margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.005em;
+    flex: 1 1 240px;
+  }
+  .chip {
+    font: 600 10px/1 "IBM Plex Mono", monospace;
+    letter-spacing: .09em; text-transform: uppercase;
+    padding: 5px 8px; border-radius: 2px; white-space: nowrap;
+  }
+  .chip.live   { color: var(--live);   background: var(--live-bg); }
+  .chip.parked { color: var(--parked); background: var(--parked-bg); }
+  .chip.dead   { color: var(--dead);   background: var(--dead-bg); }
+  .chip.open   { color: var(--open);   background: var(--open-bg); }
+
+  .param {
+    font-family: "IBM Plex Mono", monospace; font-size: 12px;
+    color: var(--accent); word-break: break-word;
+  }
+  .what { margin: 9px 0 0; color: var(--ink-soft); max-width: 74ch; }
+  .mine { color: var(--muted); font-style: italic; }
+
+  .ev { margin-top: 12px; border-top: 1px dashed var(--rule); padding-top: 10px; display: grid; gap: 6px; }
+  .ev-row { display: grid; grid-template-columns: 92px 1fr; gap: 12px; align-items: baseline; }
+  .ev-row dt {
+    font: 500 10px/1.6 "IBM Plex Mono", monospace;
+    letter-spacing: .09em; text-transform: uppercase; color: var(--muted);
+  }
+  .ev-row dd { margin: 0; font-size: 14px; color: var(--ink-soft); }
+  .ev-row dd b { color: var(--ink); font-weight: 600; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---------- runs table ---------- */
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 2px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th {
+    font: 600 10px/1.6 "IBM Plex Mono", monospace; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--muted); background: var(--surface-2);
+    position: sticky; top: 0;
+  }
+  tr:last-child td { border-bottom: none; }
+  td.mono, th.mono { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
+
+  .note {
+    margin-top: 14px; padding: 13px 16px; background: var(--surface-2);
+    border-left: 3px solid var(--accent-dim); border-radius: 2px;
+    font-size: 14px; color: var(--ink-soft); max-width: 78ch;
+  }
+  footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 13px; }
+  code {
+    font-family: "IBM Plex Mono", monospace; font-size: .92em;
+    background: var(--surface-2); padding: 1px 5px; border-radius: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  @media (max-width: 560px) { .ev-row { grid-template-columns: 1fr; gap: 2px; } }
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <p class="kicker">GLEE Competition &middot; closes 29 Aug 2026 AoE &middot; updated 23 Aug</p>
+  <h1>Change Register</h1>
+  <p class="standfirst">Every change, idea and parameter across the three families &mdash; what it does, whether it was tested, on which agents, and what came back. Status is the left stripe: shipped, parked, dead, or never run.</p>
+</header>
+
+<div class="tally" id="tally">
+  <button data-filter="all"    aria-pressed="true"><span class="dot all"></span>All <span class="n" id="c-all">0</span></button>
+  <button data-filter="live"   aria-pressed="false"><span class="dot live"></span>Shipped on <span class="n" id="c-live">0</span></button>
+  <button data-filter="parked" aria-pressed="false"><span class="dot parked"></span>Built, off <span class="n" id="c-parked">0</span></button>
+  <button data-filter="dead"   aria-pressed="false"><span class="dot dead"></span>Dead / retracted <span class="n" id="c-dead">0</span></button>
+  <button data-filter="open"   aria-pressed="false"><span class="dot open"></span>Never tested <span class="n" id="c-open">0</span></button>
+</div>
+
+<!-- ============================ BARGAINING ============================ -->
+<section>
+  <div class="sec-head">
+    <h2>Bargaining</h2>
+    <span class="rating">weakest family &middot; ~1830&ndash;1885</span>
+  </div>
+
+  <article class="entry" data-status="live">
+    <div class="etop">
+      <h3>Round-99 accept collapse</h3>
+      <span class="chip live">Shipped on</span>
+    </div>
+    <p class="param">open_horizon_cap = 99 &middot; no flag</p>
+    <p class="what">Open games are not open. The server stops them at round 99 and pays both sides $0, and nothing in the state says so &mdash; <code>rounds_left</code> returns None right through the end. The bar now collapses as the cap approaches, mirroring the bounded endgame.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Tested</dt><dd>Found in the logs, then confirmed live</dd></div>
+      <div class="ev-row"><dt>Result</dt><dd><b>Caught 11 of 11</b> games in the run37 stonewall arm that would otherwise have run to $0.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="live">
+    <div class="etop">
+      <h3>Price the endgame seat at what it returns</h3>
+      <span class="chip live">Shipped on</span>
+    </div>
+    <p class="param">endgame_sign_rate = 0.919</p>
+    <p class="what"><span class="mine">My idea &mdash; the 0.56 infimum.</span> At &delta;=0.95 over 12 rounds with the last word ours, riding to the end and demanding 0.97 is worth 0.5517 in round-one money. The seat was called a guarantee on the strength of four observations. It isn't one.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Tested</dt><dd>Full record, <span class="num">n=1,415</span></dd></div>
+      <div class="ev-row"><dt>Result</dt><dd>They sign <b>91.9%</b> (1,301). The other 114 took the $0, which was strictly worse for them &mdash; and asking less doesn't buy it back (0.9 signs 90.1%, 1.0 signs 92.1%). Seat is worth <b>0.5070</b>, not 0.5517.</dd></div>
+      <div class="ev-row"><dt>Effect</dt><dd>Floor moves 0.5352 &rarr; 0.5070. It was shaved by <code>accept_slack</code>, which prices "they may never concede" &mdash; the one risk this seat cannot carry &mdash; and not at all by the refusal risk that does. <b>Lower, not higher</b>, which is the opposite of what the transcript suggested.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="live">
+    <div class="etop">
+      <h3>accept_slack raised</h3>
+      <span class="chip live">Shipped on</span>
+    </div>
+    <p class="param">accept_slack: 0.97 &rarr; 0.99</p>
+    <p class="what"><span class="mine">My call.</span> Multiplies the predictive half of the accept bar.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Tested</dt><dd>Simulator, 14,000 games, four worlds</dd></div>
+      <div class="ev-row"><dt>Result</dt><dd><b>Inert.</b> 0.93/0.95 score 0.6331; 0.97/0.99/1.00 all score 0.6319 &mdash; a 10-rating spread against a &plusmn;45 noise floor. After the endgame seat moved out of this term, it rarely binds.</dd></div>
+      <div class="ev-row"><dt>Watch</dt><dd>Where it <em>does</em> bind is the &delta;=0.90/0.95 cells, where 23,617 refusals put the break-even at 0.20 against a bar of 0.50&ndash;0.62. If it stops being inert, it should move <b>down</b>.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="open">
+    <div class="etop">
+      <h3>The opening ask is underpriced</h3>
+      <span class="chip open">Next experiment</span>
+    </div>
+    <p class="param">never_concede_below &middot; opening_demand &middot; needs a real A/B</p>
+    <p class="what">With the accept side closed this is where bargaining is still losing. In open games we ask <b>0.500</b> and it is signed 55&ndash;100% of the time; in the &delta; 0.80/0.80 bounded cell we ask 0.597 and it is signed <b>95.2%</b>. An offer taken 95% of the time is priced too low. This is SPE played against a field that is not playing SPE &mdash; the clamp rescues us from the theory's 0.0 and then stops.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Evidence</dt><dd>663 games where we opened, run41+run42. Round 1 settles <b>45.6%</b> of all games. When they open we sign 0.431; when we open they sign 0.528.</dd></div>
+      <div class="ev-row"><dt>Why it needs a window</dt><dd>Whether they accept a higher ask is <em>their</em> move, so no replay can price it. This is the one open question arithmetic cannot answer &mdash; it needs an arm and a control.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="live">
+    <div class="etop">
+      <h3>Hold half the pot when our clock is free</h3>
+      <span class="chip live">Shipped on</span>
+    </div>
+    <p class="param">free_clock_accept_floor = 0.50 &middot; gated on &delta;<sub>me</sub> &ge; 0.999 &middot; a4c6f08</p>
+    <p class="what">The open-game walk-down exists to break a deadlock, and at &delta;=1.0 there is no deadlock to break: the offer is worth exactly as much on round 97 as on round 1, and the round-97 collapse is already underneath it. Walking the bar down to 0.35 there was conceding the one game type where refusing is genuinely free.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Evidence</dt><dd>Replay over run41+run42, all 1,285 bargaining games. Refuses <b>108</b> offers the old floor would have signed, each worth <b>+0.0458 of pot &middot; 7.7&sigma;</b>. <b>0 worse, 0 no-deals.</b></dd></div>
+      <div class="ev-row"><dt>Why gated</dt><dd>Ungated it also touches two &delta;=0.95 games &mdash; worth <b>+0.0000</b> between them, and containing the only game that came out worse. The entire gain is on the free clock, so the change is too.</dd></div>
+      <div class="ev-row"><dt>Ceiling</dt><dd>This is all of it. 0.60, 0.70, <code>accept_slack</code> 1.05/1.10 and <code>rounds_to_settle</code> 1/2 all recover the <em>same</em> 4.95 pot-units across the window. <b>The accept side is finished.</b></dd></div>
+      <div class="ev-row"><dt>Guard intact</dt><dd>A standing 0.40 is still taken &mdash; at round 97 rather than round 12. Six tests rewritten to assert termination instead of the old timing.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="dead">
+    <div class="etop">
+      <h3>settle_early &mdash; charge a rejection what it costs</h3>
+      <span class="chip dead">Measured, then unbundled</span>
+    </div>
+    <p class="param">settle_early_on &middot; rounds_to_settle 3&rarr;9 &middot; realistic_counter_share 0.45&rarr;0.25 &middot; min_accept_share 0.35&rarr;0.50</p>
+    <p class="what">The biggest bargaining finding. The share we <em>negotiate</em> is right &mdash; at &delta;=0.95 we sign a nominal 0.667 against an SPE of 0.673 &mdash; but we take six rounds to get there and our own inflation eats 23% of it, landing at 0.49 where the field banks 0.64. Our clock, not their stubbornness.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Evidence</dt><dd><span class="num">23,617</span> refused offers, each an exact paired counterfactual (accepting is unilateral and terminal, so "sign now" is <code>share &times; &delta;^(round-1)</code>). No survivorship &mdash; no-deals bank zero and are still counted.</dd></div>
+      <div class="ev-row"><dt>Break-even</dt><dd>&delta;=0.90 open 0.20 vs bar 0.505 &middot; &delta;=0.90/12 0.20 vs 0.505 &middot; &delta;=0.95 open 0.20 vs 0.624 &middot; &delta;=1.00 open hidden 0.30 vs 0.500. Cost <b>&minus;0.0055 of pot per game</b>.</dd></div>
+      <div class="ev-row"><dt>Simulated</dt><dd><b>+0.031 percentile (~+245 rating)</b> against a &plusmn;45 noise floor from six worlds. Tuned bar lands closer to the real break-even in 3 of 3 cells that move, further in none.</dd></div>
+      <div class="ev-row"><dt>Live test</dt><dd><b>run41 + run42</b> &mdash; glee-agent, 7aidara, Alpha. 1,285 bargaining games, read by replaying the shipped code over every one of them: <b>4,272 of 4,272</b> logged decisions reproduced exactly.</dd></div>
+      <div class="ev-row"><dt>Verdict</dt><dd>The bundle gained <b>+0.0458 of pot on 108 games (7.7&sigma;)</b> &mdash; and unbundling shows <em>all</em> of it came from <code>min_accept_share</code>. <code>rounds_to_settle</code> 3&rarr;9 and <code>counter_share</code> 0.45&rarr;0.25 each produced <b>zero</b> measurable gain and nothing but unmeasurable early signings. The two "settle sooner" knobs were dropped; the floor shipped alone.</dd></div>
+      <div class="ev-row"><dt>Retracted</dt><dd>The premise. Median settlement is round <b>2</b>, not six &mdash; the whole-corpus figure did not describe the current build. The simulator's <code>rounds_to_settle</code> sweep (12&rarr;+76) pointed the wrong way and did not survive contact with real games.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="open">
+    <div class="etop">
+      <h3>costless_open_holds &mdash; stop walking a free clock</h3>
+      <span class="chip open">Never tested</span>
+    </div>
+    <p class="param">costless_open_holds_on &middot; costless_open_share = 0.57</p>
+    <p class="what"><span class="mine">My idea, from the 50/50-at-round-4 transcript.</span> Two faults: <code>costless_hold_share</code> is exactly 0.50 so an even split <em>meets</em> the bar, and the walk-down is keyed to a 12-round soft horizon in a 99-round game &mdash; so the bar bottoms out at 0.35 by round 20 and sits there for 79 more rounds, while waiting costs us nothing.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Simulated</dt><dd><b>+0.10 to +0.18 of pot</b> against every opponent that concedes (field, boulware, conceder, probe); <b>exactly flat</b> against the three that never do &mdash; at &delta;=1.0 taking their number later costs the same. No-deals stay 0.00%.</dd></div>
+      <div class="ev-row"><dt>Cost</dt><dd>Mean rounds 27.4 &rarr; 45.7 in that cell (~0.6&times; throughput there). Games reaching round 95+ barely move: 19.3% &rarr; 19.5%.</dd></div>
+      <div class="ev-row"><dt>Held at</dt><dd>0.57, not the sim's preferred 0.70 &mdash; real data says refusing 0.60+ at &delta;=1.0 returned &minus;0.3057 of pot over 263 refusals (&sigma; &minus;9.9).</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="open">
+    <div class="etop">
+      <h3>sweep_counter &mdash; price a sweeper off his own clock</h3>
+      <span class="chip open">Never tested</span>
+    </div>
+    <p class="param">sweep_counter_on &middot; sweep_counter_sweetener = 0.01</p>
+    <p class="what"><span class="mine">My idea.</span> Game 12416c63: he repeated 199,167/800,833 on rounds 2, 4 and 6; we answered 850,000, 824,698, 802,270 &mdash; asks he could never sign &mdash; then took his 199,167. Repeating costs him a round of his own 5%, so 800,833 next round is worth 760,791 now. Anything above that beats waiting, <em>for him</em>. Leaves us 231,601.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Live test</dt><dd><b>run39</b> &mdash; launched on 3 agents, drained after 14 minutes at my request. <b>Not measured.</b></dd></div>
+      <div class="ev-row"><dt>Known risk</dt><dd>Theory says a fully rational sweeper refuses (his ultimatum is worth more). It only clears because sweepers empirically leave 3%, not 0%.</dd></div>
+      <div class="ev-row"><dt>Calibration</dt><dd>The sweep detector is sound: opponents it labels sweepers leave a median <b>0.0300</b> at the horizon (n=20); everyone else leaves <b>0.4000</b> (n=64).</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="parked">
+    <div class="etop">
+      <h3>costless_hold_cap &mdash; stop dragging a free-delay game</h3>
+      <span class="chip parked">Built, off</span>
+    </div>
+    <p class="param">costless_hold_cap = 0.60 &middot; costless_hold_cap_on</p>
+    <p class="what"><span class="mine">My idea &mdash; "it's not worth holding to round 99 for the whole pot."</span> At &delta;=1.0 holding out pays a long way, then turns over hard.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Evidence</dt><dd>Refusing &ge;0.55: &minus;0.2122, n=364, &sigma; &minus;8.9. Refusing &ge;0.60: <b>&minus;0.3057, n=263, &sigma; &minus;9.9</b>.</dd></div>
+      <div class="ev-row"><dt>Live test</dt><dd><b>run37</b> on 7aidara_Alpha &mdash; the gate opened <b>twice in five hours</b>. Unmeasurable: it needs &delta;=1.0 <em>and</em> an open horizon <em>and</em> a 60%+ offer. n=100 would take ~100 hours.</dd></div>
+      <div class="ev-row"><dt>Decision</dt><dd>Ships on the historical measurement or not at all. Running it longer will not settle it.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="parked">
+    <div class="etop">
+      <h3>discounted_hold_cap</h3>
+      <span class="chip parked">Built, off</span>
+    </div>
+    <p class="param">discounted_hold_cap = 0.425 &middot; discounted_hold_cap_on</p>
+    <p class="what">The mirror image: cap the open-game bar where waiting <em>does</em> cost us.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Evidence</dt><dd>&minus;0.0464 of pot over 389 refusals, <b>&sigma; &minus;9.0</b>, sign holds in every 0.025 band from 0.375 up and in both seats. No-deal rates 0.0&ndash;1.8%, so not the usual survivorship trap.</dd></div>
+      <div class="ev-row"><dt>Live test</dt><dd><b>run35</b> was lost mid-arm; re-run in <b>run42</b> across 1,284 games.</dd></div>
+      <div class="ev-row"><dt>Result</dt><dd><b>Changed 0 of 13,479 seller turns.</b> The hard-market branch is genuinely reached &mdash; 1,796 times &mdash; but the mix quota and the credibility veto it replaces return the same answer on every one: <em>do not recommend</em>.</dd></div>
+      <div class="ev-row"><dt>What it did reveal</dt><dd>Our recommendation rate on low products in a hard market is <b>0 of 1,796</b>, and neither existing rule will move it. Recommending more there needs a different lever entirely.</dd></div>
+      <div class="ev-row"><dt>Note</dt><dd>Largely superseded by <code>settle_early</code>, which attacks the same defect more generally.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="dead">
+    <div class="etop">
+      <h3>Lower the opening demand</h3>
+      <span class="chip dead">Answered, no change</span>
+    </div>
+    <p class="param">opening_demand = 0.85 &middot; unchanged since the first commit</p>
+    <p class="what"><span class="mine">My question.</span> Excluding the endgame-seat games (12 rounds, last word ours, &delta;=0.95/1.00), our opening is signed <b>21.0%</b> of the time (n=9,370). The cliff is at 0.62.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Curve</dt><dd class="num">0.50&rarr;70.1% &middot; 0.55&rarr;46.5% &middot; 0.60&rarr;38.0% &middot; 0.65&rarr;7.5% &middot; 0.70&rarr;2.5% &middot; 0.85&rarr;5.9%</dd></div>
+      <div class="ev-row"><dt>Controlled</dt><dd>Within the same cell, low ask vs high ask: &delta;=0.80 <b>+0.127 / +0.062</b>; &delta;=0.90 &minus;0.000 / +0.020; &delta;=0.95 &minus;0.003 / &minus;0.005. Lowering pays <em>only</em> in proportion to what a refused round costs.</dd></div>
+      <div class="ev-row"><dt>Why no change</dt><dd><code>opening_demand</code> is the wrong lever &mdash; swept 0.60&ndash;0.90, every value inside the noise floor, because the floor term dominates. The lever is <code>rounds_to_settle</code>, which moves &delta;=0.80's opening 0.706 &rarr; 0.595 (across the cliff) while leaving &delta;=1.00 alone. Already inside <code>settle_early</code>.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="dead">
+    <div class="etop">
+      <h3>Bounded-only accept bar</h3>
+      <span class="chip dead">Reverted</span>
+    </div>
+    <p class="param">495c9c1 &middot; realistic_counter_share, bounded games only</p>
+    <p class="what">Raised the bar for bounded games. Measured +0.080 (+2.20&sigma;) at &delta;=0.95 and +0.110 (+1.61&sigma;) at &delta;=1.0 on the first round.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Result</dt><dd><b>Did not replicate.</b> Against a proper control: &minus;0.015 and +0.026, weighting to +0.0025. The untouched open cells swung &minus;1.84&sigma; and +1.81&sigma; in the same run &mdash; which is what the per-cell noise floor looks like, and is where the original result came from.</dd></div>
+    </dl>
+  </article>
+</section>
+
+<!-- ============================ NEGOTIATION ============================ -->
+<section>
+  <div class="sec-head">
+    <h2>Negotiation</h2>
+    <span class="rating">strongest family &middot; ~2400&ndash;2600</span>
+  </div>
+
+  <article class="entry" data-status="live">
+    <div class="etop">
+      <h3>stonewall_needs_endgame &mdash; don't cave while refusing is free</h3>
+      <span class="chip live">Shipped on</span>
+    </div>
+    <p class="param">stonewall_needs_endgame = True &middot; stonewall_offers = 6</p>
+    <p class="what"><span class="mine">My idea &mdash; the opponent is reading us as a reliable signer and repeating the same price to exploit it; keep refusing.</span> On the 6th identical price we used to sign. Now we wait until refusing actually costs something &mdash; the end of a bounded game, or the round cap of an open one.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Live test</dt><dd><b>run37</b> on 7aidara, 5h, against four controls</dd></div>
+      <div class="ev-row"><dt>Result</dt><dd><b>12 better, 11 exactly equal, 0 worse.</b> Sign test p = 0.00049 (3.5&sigma;). Caving would have paid 0.0604 of valuation; holding banked <b>0.1162</b>. All 23 closed &mdash; no no-deals, no walk-aways.</dd></div>
+      <div class="ev-row"><dt>Method</dt><dd>Paired within-game: at the gate the price is known, so caving's payoff is arithmetic. The four controls validated it &mdash; they cave on sight, and across 173 games the largest deviation from the predicted value was <b>2.3e-9</b>.</dd></div>
+      <div class="ev-row"><dt>Cost</dt><dd>Negotiation throughput ~20% (96 games/slot vs 120&ndash;130). Walk-away risk only bounded at ~12% by 0-of-23.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="live">
+    <div class="etop">
+      <h3>rung_aware &mdash; price against the valuation pool</h3>
+      <span class="chip live">Shipped on</span>
+    </div>
+    <p class="param">rung_aware = True &middot; rung_shade 0.15 &middot; rung_last_word_shade 0.01</p>
+    <p class="what">Valuations are drawn from a known pool &mdash; {80, 100, 120, 150} &times; {1, 100, 10000}. The ladder walks the tradable rungs from the top down, because a rung refused costs only the round it took to ask.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Structural</dt><dd>A zone of agreement <b>always</b> exists (18 distinct pairs, all same-scale, seller &lt; buyer), so <code>_no_zone_of_agreement</code> is dead code. Negotiation carries <b>no inflation</b> &mdash; payoff is <code>|price &minus; value|</code>, confirmed against the cache.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="dead">
+    <div class="etop">
+      <h3>hide_rung_from_last_word</h3>
+      <span class="chip dead">Premise retracted</span>
+    </div>
+    <p class="param">hide_rung_from_last_word = False &middot; kept, off</p>
+    <p class="what"><span class="mine">From my rung-signalling question.</span> Shipped on the claim that an ask made when the last price is theirs "is never signed anyway, so raising it is free" &mdash; 0 signings in 715 games.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Defect</dt><dd><b>Survivorship.</b> The scan required a history entry on the final round &mdash; which no game has if the deal closed a round earlier. It excluded its own counterexamples; the number was zero by construction.</dd></div>
+      <div class="ev-row"><dt>Truth</dt><dd>Scored on <code>agreed_round</code>: the ask closes <b>10.2%</b> of the time (29 of 283), not 0%.</dd></div>
+      <div class="ev-row"><dt>Live test</dt><dd><b>run37</b> on glee-agent. Mechanism worked &mdash; revealing asks cut to <b>10.2%</b> against a 30.8&ndash;43.1% control band, and correctly inert when the opponent already knows our value. But it halved the close rate to 4.2% and banked less than all four controls.</dd></div>
+      <div class="ev-row"><dt>Kept because</dt><dd>The mechanism is sound; only the motive was wrong. Revivable if a real one appears.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="dead">
+    <div class="etop">
+      <h3>Never concede past the midpoint</h3>
+      <span class="chip dead">Cannot bind</span>
+    </div>
+    <p class="param">no parameter &mdash; removed rather than shipped</p>
+    <p class="what"><span class="mine">My idea, for complete-information games.</span> Built as a rail, then removed.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Result</dt><dd>Inert by construction. The ladder parks at <code>value + 0.85 &times; (nearest rung &minus; value)</code> and the midpoint is <code>+ 0.50 &times;</code> the same &mdash; so the ladder is already the stricter of the two wherever a midpoint can be computed at all. Off-pool it returns None and there is nothing to compare.</dd></div>
+      <div class="ev-row"><dt>Decision</dt><dd>Removed rather than ship a dial that cannot move. Caught by its own test.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="dead">
+    <div class="etop">
+      <h3>stonewall_respects_ultimatum</h3>
+      <span class="chip dead">Dead code</span>
+    </div>
+    <p class="param">stonewall_respects_ultimatum = False</p>
+    <p class="what">Hold the ultimatum instead of caving, when the last word is ours. 216 of 216 last-word offers we have made were accepted.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Status</dt><dd><b>Unreachable.</b> <code>holds_ultimatum</code> requires a bounded game, and the stonewall branch it modifies can only arm in an open one: a 10-round game gives the opponent at most 5 offers where the trigger needs 6. The two conditions are mutually exclusive, so it cannot change a decision. Not worth a window.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="dead">
+    <div class="etop">
+      <h3>known_zone_floor</h3>
+      <span class="chip dead">Inert &mdash; do not run again</span>
+    </div>
+    <p class="param">known_zone_floor = 0.0 (off) &middot; tested at 0.45 in run42</p>
+    <p class="what">Refuse a thin slice of a surplus we can see. Selling at 100 to a buyer worth 200, a price of 110 is a tenth of the surplus &mdash; the cell we currently sign at 0.3132.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Result</dt><dd><b>Changed 0 of 13,056 decisions.</b> Its condition held on roughly 450 turns, but the surrounding logic was already refusing every one of them. It moved 50 counter <em>prices</em> and nothing else.</dd></div>
+      <div class="ev-row"><dt>Lesson</dt><dd>It was sized by how often its condition fires (43.2% of eligible games) &mdash; a different question from how often it changes the decision. Three hours of server time went into finding that out; a replay finds it in a minute.</dd></div>
+    </dl>
+  </article>
+</section>
+
+<!-- ============================ PERSUASION ============================ -->
+<section>
+  <div class="sec-head">
+    <h2>Persuasion</h2>
+    <span class="rating">~1875&ndash;2060</span>
+  </div>
+
+  <article class="entry" data-status="dead">
+    <div class="etop">
+      <h3>hard_regime_rations_on_mix</h3>
+      <span class="chip dead">Inert &mdash; do not run again</span>
+    </div>
+    <p class="param">hard_regime_rations_on_mix &middot; knife_edge_margin = 0.02</p>
+    <p class="what">Extends the knife-edge ration to the interior: ration against the <em>realised</em> mix <code>delivered/(recommended+1) &ge; &tau;(1+margin)</code> rather than the credibility proxy.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Sizing</dt><dd>The live gate opens on 6.3% of interior low rounds (9.7% even at margin 0). The mix rule gives 16.2%, under <code>q*</code> in every configuration.</dd></div>
+      <div class="ev-row"><dt>Live test</dt><dd><b>run35</b> on agent01 &mdash; mid-arm when the fleet was drained. Window lost, never resumed.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="dead">
+    <div class="etop">
+      <h3>"Buyers punish detected lies"</h3>
+      <span class="chip dead">Retracted</span>
+    </div>
+    <p class="param">no parameter &mdash; measurement withdrawn</p>
+    <p class="what">A morning finding that lie rates collapse 56.1% &rarr; 17.0% after a buyer catches one.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Defect</dt><dd><b>Reverse causation.</b> Lies the buyer <em>bought</em> ran 51.5% &rarr; 94.3%; lies they <em>passed</em> ran 59.1% &rarr; 0.5% &rarr; 0.0%. Buyers cannot react to lies they never saw &mdash; the "punishment" was non-buyer selection.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="dead">
+    <div class="etop">
+      <h3>Buyer-seat counterfactuals</h3>
+      <span class="chip dead">Structurally impossible</span>
+    </div>
+    <p class="param">standing constraint</p>
+    <p class="what">Quality is revealed <b>only on rounds we bought</b> &mdash; 28,309 revealed against 34,129 not. Any buyer-side "what if we had passed" is unanswerable, because the outcome we would compare against was never observed.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Consequence</dt><dd>Persuasion buyer-seat changes cannot be validated offline. Seller seat only.</dd></div>
+    </dl>
+  </article>
+</section>
+
+<!-- ============================ METHOD ============================ -->
+<section>
+  <div class="sec-head">
+    <h2>Method &amp; tooling</h2>
+    <span class="rating">how anything gets decided</span>
+  </div>
+
+  <article class="entry" data-status="live">
+    <div class="etop">
+      <h3>Offline simulator</h3>
+      <span class="chip live">Built, in use</span>
+    </div>
+    <p class="param">scratchpad: corpus.py &middot; oppfit.py &middot; engine.py &middot; opponents.py &middot; sweep*.py</p>
+    <p class="what"><span class="mine">My idea.</span> No API. Configurations drawn from the real mix of all 15,788 bargaining games; our seat played by the shipped code; the other seat by a field fitted to real opponents plus eight adversarial archetypes.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Calibration</dt><dd>Reproduces median settlement round per cell; scores <b>+0.03 of pot optimistic</b> on level. Good for relative comparison, useless for absolute claims.</dd></div>
+      <div class="ev-row"><dt>Noise floor</dt><dd><b>&plusmn;45 rating per world</b> at n=4,000, measured by re-running the shipped policy on six worlds. Any claimed gain must clear it.</dd></div>
+      <div class="ev-row"><dt>Rule</dt><dd>Never ship on simulator evidence alone. It chooses which arm deserves a real window.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="live">
+    <div class="etop">
+      <h3>Replay the flag before running it</h3>
+      <span class="chip live">Mandatory pre-flight</span>
+    </div>
+    <p class="param">scratchpad: replay43.py &middot; unbundle.py &middot; sweep43.py</p>
+    <p class="what">The turn logs are enough to re-run the shipped decision code exactly. Rebuild <code>state["history"]</code> from the turn sequence &mdash; the log keeps only its length &mdash; then call the real <code>_make_decision</code> twice with the flag flipped. It reproduced <b>4,272 of 4,272</b> bargaining decisions and <b>13,056 of 13,056</b> negotiation ones. Zero mismatches: this is the agent, not a model of it.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Why it exists</dt><dd>run42 spent three hours and 1,956 games on three arms. <b>Two of them changed zero decisions.</b> A replay would have said so before launch, for free.</dd></div>
+      <div class="ev-row"><dt>The rule</dt><dd>Count how many decisions a candidate <em>changes</em> &mdash; not how often its condition fires. Both dud arms were sized on the second question.</dd></div>
+      <div class="ev-row"><dt>What it settles outright</dt><dd>A flag that only makes us <em>refuse</em> more needs no window at all: accepting is unilateral and terminal, so the alternative is arithmetic. That is how the whole accept-side sweep was decided without a single game.</dd></div>
+      <div class="ev-row"><dt>What it cannot settle</dt><dd>A flag that makes us <em>accept</em> earlier. The opponent then plays on and the counterfactual is unrecoverable &mdash; that half needs a real arm and a control.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="live">
+    <div class="etop">
+      <h3>Paired within-game counterfactual</h3>
+      <span class="chip live">Standing technique</span>
+    </div>
+    <p class="param">the only measurement that has worked</p>
+    <p class="what">At a decision point the price on the table is known, so the payoff of the other choice is arithmetic, not inference. Accepting is unilateral and terminal, so every refused offer is its own control.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Why it matters</dt><dd>It made the stonewall result readable at <b>n=23</b> and the bargaining diagnosis solid at <b>n=23,617</b> &mdash; where Elo said nothing at either sample size.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="dead">
+    <div class="etop">
+      <h3>Elo as a measurement</h3>
+      <span class="chip dead">Do not use</span>
+    </div>
+    <p class="param">game_rating = 2000 + 8000&times;(percentile &minus; 0.5)</p>
+    <p class="what">One percentile point is 80 rating points. Two <em>identical</em> builds diverged <b>213 points in bargaining</b> and 118 in negotiation over the same 5-hour window.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Rule</dt><dd>Read mechanism first, never Elo. Run three controls, never one.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="dead">
+    <div class="etop">
+      <h3>Denominators conditioned on the answer</h3>
+      <span class="chip dead">Three occurrences</span>
+    </div>
+    <p class="param">the recurring failure mode</p>
+    <p class="what">Three measurements have been wrong the same way &mdash; the filter that built the sample already excluded everything that would have contradicted it.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>1</dt><dd>"They concede 67% however long we hold" &mdash; computed over closed deals; the games where they walked were invisible.</dd></div>
+      <div class="ev-row"><dt>2</dt><dd>"Deal rate 1.000 with a ZOPA" &mdash; a ZOPA is only computable from a closed deal. True by construction.</dd></div>
+      <div class="ev-row"><dt>3</dt><dd>"Penultimate ask signed 0 of 715" &mdash; required a final-round entry, which no game has if the ask closed it earlier.</dd></div>
+      <div class="ev-row"><dt>Test</dt><dd>Ask what a game must do to enter the denominator, then ask whether the event being measured would have prevented that.</dd></div>
+    </dl>
+  </article>
+
+  <article class="entry" data-status="live">
+    <div class="etop">
+      <h3>Run configuration</h3>
+      <span class="chip live">In use</span>
+    </div>
+    <p class="param">--families bargaining &middot; --concurrency 8</p>
+    <p class="what"><span class="mine">My catch.</span> Concurrency 4 was inherited from a five-agent fleet sharing the queue; with three agents there was no one to share with.</p>
+    <dl class="ev">
+      <div class="ev-row"><dt>Result</dt><dd><b>315 &rarr; 645 bargaining games/hour</b> (2.05&times;).</dd></div>
+      <div class="ev-row"><dt>But</dt><dd>Per <em>slot</em> the rate is 26 vs 27/hour &mdash; unchanged. The whole gain came from concurrency; narrowing to one family cost nothing but bought nothing, leaving slots idle. The bargaining queue cannot saturate 8 slots, so higher concurrency would likely still yield more.</dd></div>
+    </dl>
+  </article>
+</section>
+
+<!-- ============================ RUNS ============================ -->
+<section>
+  <div class="sec-head">
+    <h2>Runs</h2>
+    <span class="rating">what each window actually answered</span>
+  </div>
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Run</th><th class="mono">Length</th><th>Arms</th><th>Agents</th><th>Outcome</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">run35</td><td class="mono">&mdash;</td>
+          <td>persuasion mix ration &middot; discounted_hold_cap</td>
+          <td>agent01</td>
+          <td><b>Lost.</b> Drained mid-arm; both windows gone, never resumed.</td>
+        </tr>
+        <tr>
+          <td class="mono">run37</td><td class="mono">5 h</td>
+          <td>stonewall &middot; hide_rung &middot; costless_hold_cap</td>
+          <td>7aidara &middot; glee-agent &middot; Alpha, vs Beta + Gamma</td>
+          <td><b>Two answers.</b> stonewall shipped (3.5&sigma;); hide_rung's premise retracted; costless_hold_cap unmeasurable at n=2. 8,115 games, 0 errors.</td>
+        </tr>
+        <tr>
+          <td class="mono">run38</td><td class="mono">20 min</td>
+          <td>none &mdash; smoke test</td>
+          <td>all five</td>
+          <td>Clean. Confirmed the shipped build plays without errors.</td>
+        </tr>
+        <tr>
+          <td class="mono">run39</td><td class="mono">14 min</td>
+          <td>sweep_counter</td>
+          <td>glee-agent &middot; 7aidara &middot; Alpha</td>
+          <td><b>Not measured.</b> Drained on request &mdash; ~1/20th of the sample the gate needed.</td>
+        </tr>
+        <tr>
+          <td class="mono">run40</td><td class="mono">25 min</td>
+          <td>settle_early</td>
+          <td>3 arms + 2 controls</td>
+          <td>Superseded &mdash; reconfigured to bargaining-only at concurrency 8.</td>
+        </tr>
+        <tr>
+          <td class="mono">run41</td><td class="mono">2.3 h</td>
+          <td>settle_early</td>
+          <td>glee-agent &middot; 7aidara &middot; Alpha</td>
+          <td>Bargaining only, 645 games/hour. Pools with run42 &mdash; same build, same flags, contiguous window.</td>
+        </tr>
+        <tr>
+          <td class="mono">run42</td><td class="mono">3 h</td>
+          <td>settle_early &middot; known_zone_floor &middot; hard_regime_rations</td>
+          <td>glee-agent &middot; 7aidara &middot; Alpha</td>
+          <td>1,956 games, one arm per family. <b>Two of the three arms changed no decision at all</b>; the third's gain was traced to a single knob. Shipped <code>free_clock_accept_floor</code>.</td>
+        </tr>
+        <tr>
+          <td class="mono">run43</td><td class="mono">0.9 h</td>
+          <td>none &mdash; throughput test</td>
+          <td>Gamma &middot; Beta</td>
+          <td>Cut short. Beta at concurrency 14 returned 124 games to Gamma's 92 at 8, with fewer rate-limit waits &mdash; the per-agent ceiling was not binding at 8.</td>
+        </tr>
+        <tr>
+          <td class="mono">run44</td><td class="mono">6 h</td>
+          <td>none &mdash; all five on HEAD</td>
+          <td>all five</td>
+          <td><b>In flight.</b> Defensive: Gamma stops defending its rating at 07:06Z on the 25th, and the board ranks the account by its best agent, so five converging draws beat one.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note"><b>Standing rules.</b> One change per window, never pooled. Require 3&sigma; or two independent rounds before shipping. Only strictly-dominated fixes have ever survived contact with the server &mdash; seven tuning arms measured nothing. Every deploy sets all flags explicitly and verifies them from inside each agent's own directory before launching; the repo doubles as glee-agent's working directory, which has twice left a stale arm flag in the tree.</p>
+</section>
+
+<footer>
+  Kept alongside the code at <code>notes/change-ledger.html</code>. Ask for it to be updated whenever a run lands or an idea gets tested &mdash; it republishes to the same address.
+</footer>
+
+</div>
+
+<script>
+  (function () {
+    var entries = Array.prototype.slice.call(document.querySelectorAll(".entry"));
+    var buttons = Array.prototype.slice.call(document.querySelectorAll("#tally button"));
+    var counts = { all: entries.length, live: 0, parked: 0, dead: 0, open: 0 };
+    entries.forEach(function (e) { counts[e.dataset.status]++; });
+    Object.keys(counts).forEach(function (k) {
+      var el = document.getElementById("c-" + k);
+      if (el) el.textContent = counts[k];
+    });
+
+    function apply(filter) {
+      entries.forEach(function (e) {
+        e.classList.toggle("hide", filter !== "all" && e.dataset.status !== filter);
+      });
+      buttons.forEach(function (b) {
+        b.setAttribute("aria-pressed", String(b.dataset.filter === filter));
+      });
+      try { localStorage.setItem("glee-ledger-filter", filter); } catch (err) {}
+    }
+
+    buttons.forEach(function (b) {
+      b.addEventListener("click", function () { apply(b.dataset.filter); });
+    });
+
+    var saved = "all";
+    try { saved = localStorage.getItem("glee-ledger-filter") || "all"; } catch (err) {}
+    if (!counts.hasOwnProperty(saved)) saved = "all";
+    apply(saved);
+  })();
+</script>

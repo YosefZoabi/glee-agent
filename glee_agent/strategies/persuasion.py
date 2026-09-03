@@ -46,6 +46,22 @@ _NEGATIVE_HINTS = (
     "want to pass", "understand a pass", "understand if you",
     "not this round", "better to wait", "wait for a better",
     "want to skip", "hold off", "not the one",
+    # A refusal phrased just outside the list above reads as a RECOMMENDATION,
+    # because anything unmatched falls through to "sales pitch". Measured over
+    # 116,820 buyer rounds where quality was later revealed: 544 purchases were
+    # made against a message a person would read as an outright refusal, and
+    # 544 of the 544 were low quality. A 100% dud rate, no exceptions.
+    #
+    # "not this one" alone accounts for 1,341 of the misreads. The list already
+    # held "pass on this" and "not this round"; the sellers write "pass this
+    # round" and "Not this one", which are near-misses of both.
+    #
+    # Re-scored against the same corpus, these hints refuse 544 duds and zero
+    # good units -- the change cannot cost a high-quality purchase, because no
+    # recommendation in 116,820 rounds contains any of these strings.
+    "not this one", "below standard", "wouldn't buy it", "would not buy it",
+    "pass this round", "low-quality product", "low quality product",
+    "wouldn't be a fair trade", "would not be a fair trade", "there'll be better",
 )
 
 
@@ -64,6 +80,70 @@ def _is_positive(signal) -> bool:
     # revenue, so an explicit negative is the only signal worth reading
     # literally; everything else is the sales pitch we should expect by default.
     return not any(hint in text for hint in _NEGATIVE_HINTS)
+
+
+
+def _seller_has_declined(game: dict) -> bool:
+    """Has this seller ever spent a sale to say no?
+
+    A seller who recommends every single round is telling us his recommendation
+    carries no information; one who declines is showing the signal costs him
+    something. Measured over 116,820 buyer rounds, inside the cells where the
+    prior does not clear the bar:
+
+        praises everything early -> later dud rate 0.160
+        declined 1 of first 4    -> 0.102
+        declined 2 of first 4    -> 0.081
+        declined 3-4 of first 4  -> 0.069
+
+    At m=1.20 the break-even dud rate is 1 - 1/m = 0.167, so a seller who never
+    declines leaves us playing for nothing while one who has declined is
+    comfortably profitable. Pooled across ALL cells the effect vanishes
+    (0.285/0.287/0.286/0.315) because the easy cells, where everyone buys
+    regardless, swamp it -- so this must stay gated to the hard region.
+
+    Costs nothing to observe: the messages arrive whether or not we buy.
+    """
+    for entry in history(game):
+        msg = entry.get("seller_message")
+        if msg is not None and not _is_positive(msg):
+            return True
+    return False
+
+
+
+def _certified_recommendation(game: dict) -> bool:
+    """The seller has proved his signal costs him something, and is now saying buy.
+
+    In the hard cells the prior does not clear the bar, so a recommendation is
+    only worth taking from a seller whose recommendations mean anything -- and
+    the evidence for that is whether he has ever spent a sale to say no.
+    Measured over 116,820 buyer rounds inside those cells: a seller who praises
+    everything delivers duds at 0.160, one who has declined at 0.069-0.102,
+    against a break-even of 1 - 1/m = 0.167 at m = 1.20.
+
+    This is the positive half of the rule. `require_seller_declined` only ever
+    refused, which in cells where we already buy nothing changes nothing;
+    escaping a zero needs an actual purchase. `break_even_profit_cap` stops us
+    once we are ahead, so this takes one or two units and banks them.
+    """
+    if not P.certified_first_buy:
+        return False
+    if not _is_positive(game.get("game_state", {}).get("seller_message")):
+        return False
+    seen = declined = bought = 0
+    for entry in history(game):
+        msg = entry.get("seller_message")
+        if msg is None:
+            continue
+        seen += 1
+        if not _is_positive(msg):
+            declined += 1
+        if entry.get("bought"):
+            bought += 1
+    return (seen >= P.certified_min_rounds
+            and declined >= P.certified_min_declines
+            and bought < P.certified_max_buys)
 
 
 def _template_key(message) -> str:
@@ -621,6 +701,18 @@ def _buyer_decision(game: dict) -> dict:
     # information and the prior was exactly right: -2,000,000 on a game paying
     # +333,333/round, and -4,000,000 on one paying +1,000,000/round.
     if p * v + (1.0 - p) * u > price:
+        return {"decision": "yes"}
+
+
+    # run60 arm. Past this point the prior does NOT clear the buyer's bar, so a
+    # recommendation is only worth taking if this seller's recommendations mean
+    # anything -- and the only evidence for that is whether he has ever turned a
+    # sale down. See `_seller_has_declined`.
+    if P.require_seller_declined and not _seller_has_declined(game):
+        return {"decision": "no"}
+
+    # run61: the positive half -- take a proved seller's recommendation.
+    if _certified_recommendation(game):
         return {"decision": "yes"}
 
     if P.press_recommendations and price > 0 and             p * v + (1.0 - p) * u >= price * P.explore_tolerance:

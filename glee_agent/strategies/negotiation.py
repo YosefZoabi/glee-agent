@@ -489,7 +489,19 @@ def _make_offer(game: dict) -> dict:
         if SEND_MESSAGES and messages_allowed(game):
             action["message"] = _offer_message(role, 0.0)
         return action
-    price = _bounded_price(game, state, slot, role, _target_price(state, slot, role))
+    # An even number of rounds left means the LAST proposal of the game is ours,
+    # so every price between here and then is one they can simply wait out. See
+    # `last_word_holds_out`: hold the ultimatum price rather than walking a
+    # schedule down to it.
+    left_now = rounds_left(state, P.unbounded_soft_horizon)
+    holds_last_word = (
+        P.last_word_holds_out
+        and left_now is not None
+        and left_now % 2 == 0
+        and number(state, f"{OPPOSITE[slot]}_value", None) is not None
+    )
+    price = _bounded_price(game, state, slot, role,
+                           _target_price(state, slot, role, last_word=holds_last_word))
     # One shot, so there is no counter to invite: the price we send is the whole
     # game and acceptance is a step on the opponent's four-point support.
     if P.ultimatum_ladder and number(state, "max_rounds", None) == 1:

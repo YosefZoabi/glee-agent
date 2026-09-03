@@ -21,10 +21,10 @@ class BargainingParams:
     # share and walk down to it, because the field (LLMs and humans) concedes.
     opening_demand: float = 0.85
     # Higher = hold the opening demand longer before collapsing to the SPE share.
-    concession_exponent: float = 1.6
+    concession_exponent: float = 1.6   # run61: KEPT, complete-info agreement rose
     # Never leave the opponent literally nothing -- a 0 offer reads as an insult
     # and buys a rejection we pay inflation for.
-    min_opponent_share: float = 0.03
+    min_opponent_share: float = 0.015   # run54
 
     # The equilibrium share swings wildly with the parity of the horizon: with a
     # known even number of rounds the opponent proposes last and theory says we
@@ -32,7 +32,7 @@ class BargainingParams:
     # split, conceding that far is a pure loss, so these two clamp the theory to
     # what the field will actually sign.
     never_concede_below: float = 0.45
-    min_accept_share: float = 0.35
+    min_accept_share: float = 0.35   # run61: reverted, run60 showed no gain
     # ...and the same floor for an open game where delay costs us nothing. See
     # `floor_accept_share`: the walk down exists to stop a deadlock, but a
     # player who pays nothing to wait is not in one, and 0.35 was conceding the
@@ -80,7 +80,7 @@ class BargainingParams:
     # 0.236, so the field does not play it either. The grid measures what the
     # field actually signs, which is what the floor should have been derived
     # from in the first place.
-    opening_ask_grid: bool = False
+    opening_ask_grid: bool = True   # run54
     # Shares of the pot to sample.
     #
     # run49 ran (0.52, 0.60, 0.68, 0.76, sentinel) over 1,333 known-horizon
@@ -145,7 +145,7 @@ class BargainingParams:
     # By offer band, the value of refusing (delta >= 0.95, round <= 4):
     #   0.30-0.45  +6.465     0.45-0.55  +7.368
     #   0.55-0.70  +2.762     0.70+      accepting is already right
-    patient_hold_on: bool = False
+    patient_hold_on: bool = True   # run54
     patient_hold_share: float = 0.60
     # RAISED 0.95 -> 0.999 on 2026-08-27. The 0.95 gate rested on a pooled
     # read that was Simpson's paradox: player_2 refuses nearly everything
@@ -194,8 +194,8 @@ class BargainingParams:
     # 1/2 all recovered the same 4.95 pot-units on run41+42. What is different
     # here is the condition: this raises the bar ONLY where we hold the edge,
     # instead of raising it everywhere. It ships as an arm for that reason.
-    patient_edge_on: bool = False
-    patient_edge_scale: float = 1.0
+    patient_edge_on: bool = False   # run56
+    patient_edge_scale: float = 1.0   # run56
 
     # --- What rejecting is really worth ----------------------------------
     # Measured over 55 games. The equilibrium continuation assumes an opponent
@@ -273,15 +273,23 @@ class BargainingParams:
     accept_slack: float = 0.99
     # With this many rounds left, a no-deal ($0, bottom-percentile) outranks any
     # theoretical gain, so we accept anything at or above `endgame_floor`.
+    # Converge to an even split before the server zeroes the game out.
+    # 559 open games reached rounds 90-99 and 80.1% paid nothing.
+    open_converge_on: bool = True
+    open_converge_from: int = 80
+    open_converge_by: int = 90
+    open_converge_share: float = 0.50
+    open_converge_open_share: float = 0.65
+    open_converge_floor_by: int = 93
     endgame_rounds: int = 2
-    endgame_floor: float = 0.08
+    endgame_floor: float = 0.08   # run61: reverted, it worsened the 99-round zeros
     # The mirror image on the offering side. Theory says the last proposer can
     # take everything, because the responder's alternative is $0 -- but an
     # opponent who rejects out of pique costs us the whole pot, so the last
     # offers stay large without being insulting.
     endgame_demand_cap: float = 0.55
     # `min_opponent_share` clamps this anyway, so 0.97 is what 0.99 already meant.
-    final_round_demand: float = 0.97
+    final_round_demand: float = 0.985   # run54
     # How often the responder actually signs that final offer. The seat was
     # described as a guarantee -- they choose between our number and $0, so they
     # "have to" take it -- on the strength of four observations. Over the full
@@ -394,7 +402,7 @@ class BargainingParams:
     # build at round 99 it still refuses 0.34, 0.25, 0.10 and banks nothing,
     # which is strictly dominated -- at a true final round any positive offer
     # beats zero. 25 of 3,564 open games in the record ended exactly there.
-    open_horizon_cap: int = 99
+    open_horizon_cap: int = 96   # observed: a no-limit game ended at round 96
     # Raising this to 0.75 where their delta was VISIBLE was tried live against
     # an arm holding 0.50, and lost: 0.5527 vs 0.6056 share in the treatment
     # cell, -1.4 sigma, with all three control cells matched inside 0.005. The
@@ -563,7 +571,7 @@ class NegotiationParams:
     # Complete-information games close at 96%+ while leaving the opponent 41%
     # of the surplus, so 6% was not a number anyone had earned. Start where we
     # still take the large majority and let the arm find the edge.
-    rung_shade: float = 0.15
+    rung_shade: float = 0.15   # run61: reverted, run60 showed no gain
     # ...but not when the offer is the last word. Rejecting an ultimatum pays
     # them zero and signing pays them whatever we left, and the field does the
     # arithmetic: 216 last-word offers, 216 signed, including 10 that left them
@@ -577,7 +585,41 @@ class NegotiationParams:
     # Held at 1% of the room rather than literally one unit: the pool spans
     # three scales, so a flat 1 is 1.25% of the smallest rung and 0.0001% of the
     # largest, which is not the same offer at all.
-    rung_last_word_shade: float = 0.01
+    rung_last_word_shade: float = 0.005   # run54
+    # Stop conceding in a bounded game whose last proposal is OURS.
+    #
+    # `_target_price` already prices a last word correctly -- it returns
+    # `opponent_value - rung_last_word_shade * span`, which is 0.995 of the zone
+    # -- but only when `is_final_round` fires, and that needs `rounds_left <= 1`.
+    # As buyer in a 10-round complete-information game our last offer lands on
+    # round 9, where `rounds_left` is 2, so the schedule runs instead. Measured
+    # over 08-26..08-28, our offer as a share of the known surplus:
+    #
+    #     round 1  0.960   round 5  0.836   round 9  0.774   <- our last word
+    #     round 3  0.898   round 7  0.774
+    #
+    # and 0.774 is what the archive banks across 1,544 games, against 0.990 in
+    # the one-shot seat, which IS the same position -- the responder takes it or
+    # gets zero. That seat closes 99.0%; this one closes 99.8%, which is the tell
+    # that we are far under their reservation.
+    #
+    # Passing `last_word` into `_make_offer` alone does NOTHING, because
+    # `_bounded_price` clamps a buyer's bid upward to its own previous bid: the
+    # 0.995 price is BELOW our round-7 bid, so the monotonicity clamp restores
+    # it. Retracting a concession is the only way to reach it late, and nothing
+    # in the record says an opponent signs a retraction.
+    #
+    # So do not concede in the first place. Where the last proposal is ours the
+    # schedule is giving away surplus we would otherwise still hold at the end,
+    # and holding a flat price is monotone by construction -- no retraction, no
+    # bad faith, nothing new for the opponent to react to. Walking away is not a
+    # real risk here: 1 of 1,566 bounded complete-information games ended that
+    # way.
+    #
+    # Deliberately requires a KNOWN opponent value. Where it is hidden the price
+    # comes from `_rung_price`, which has its own last-word handling and its own
+    # +2.68 sigma measurement; this must not disturb it.
+    last_word_holds_out: bool = False   # run58
 
     # --- not blinking -----------------------------------------------------
     # Complete-information deals split 0.6009 of the surplus our way when THEY
@@ -725,8 +767,8 @@ class NegotiationParams:
     # Guarded on "nothing profitable has been offered": if they have put a
     # deal on the table we would have taken it, so this can only fire in games
     # that are genuinely going nowhere.
-    stalled_walk_away: bool = False
-    stalled_walk_round: int = 12
+    stalled_walk_away: bool = False   # run56
+    stalled_walk_round: int = 12   # run56
     # Snap a ONE-SHOT price to the top of its own acceptance band.
     #
     # The responder's valuation is one of `RUNG_SHAPE` x scale and they cannot
@@ -751,7 +793,7 @@ class NegotiationParams:
     # multi-round game the responder can counter instead of accepting, so the
     # weak-dominance that makes this free does not hold; the knowledge transfer
     # this came from measured that extension separately and did not ship it.
-    ultimatum_ladder: bool = False
+    ultimatum_ladder: bool = True   # run54
     # Step back from the support point so the price stays strictly inside the
     # band. A price AT the rung is still signed, but a float that lands a
     # fraction above it is signed by nobody -- the cliff is that sharp.
@@ -855,7 +897,7 @@ class NegotiationParams:
     # The server stops an open negotiation at this round and pays both $0, the
     # same undocumented cap the bargaining family has. 547 of 2234 open games
     # in the record -- 24.5% -- ended exactly there.
-    open_horizon_cap: int = 99
+    open_horizon_cap: int = 88   # run66: near_the_end fired at r97; 80% of open games died at zero first
 
 
 @dataclass(frozen=True)
@@ -938,6 +980,11 @@ class PersuasionParams:
     # Buy on a marginal expected value during the first rounds: a purchase is
     # the only way to observe quality, and that information prices every later
     # round.
+    require_seller_declined: bool = True   # run60 arm
+    certified_first_buy: bool = True   # run61
+    certified_min_rounds: int = 3
+    certified_min_declines: int = 1
+    certified_max_buys: int = 2
     explore_rounds: int = 2
     explore_tolerance: float = 0.85
     # Take every recommendation in the cells where the prior sits ON the bar,
@@ -1106,7 +1153,7 @@ class PersuasionParams:
     # Ships OFF, as run48's only arm. Ground truth prices the quality of the
     # rounds it buys; what it cannot price is whether buying changes how the
     # seller plays the rest of the game.
-    rationing_break_even: bool = False
+    rationing_break_even: bool = True   # run54
     # Share of HIGH units the field praises. Measured 1.015 (sd 0.039) over the
     # ten cells where the buyer takes every recommendation, so the sample is
     # unselected. Kept at 1.0 rather than 1.015: the estimate is a ceiling and
@@ -1139,8 +1186,8 @@ class PersuasionParams:
     # Reads only quality we have already been shown on rounds we bought, so it
     # invents nothing: see [[glee-buyer-seat-is-unfalsifiable]] for why that
     # restriction matters here.
-    template_veto: bool = False
-    template_min_buys: int = 2
+    template_veto: bool = True   # run56
+    template_min_buys: int = 3   # run56
     # ...and stop once a low-m game is ahead. Where the multiplier is small a
     # lead is FRAGILE: at m=1.20 a high pays +0.20x and a low costs -1.00x, so
     # one bad draw wipes out five good ones. Riding that out is not patience,

@@ -31,6 +31,14 @@
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
+
+% With T1 encoding and no Type 1 T1 typewriter face installed, LaTeX silently
+% substitutes bitmap (Type 3) fonts for every \texttt. Those print badly and
+% arXiv rejects them. Latin Modern Mono is a real Type 1 T1 face and is
+% visually near-identical; setting only \ttdefault leaves the style's Times
+% body font alone.
+\renewcommand{\ttdefault}{lmtt}
+
 \usepackage{booktabs}
 \usepackage{amsfonts}
 \usepackage{amsmath}
@@ -94,8 +102,8 @@
 I competed in both GLEE tracks: as \textsc{7aidara\_Gamma}, a deterministic,
 LLM-free agent that finished \tbf{6th in the agent track} (2360.8) over
 \tbf{264{,}432 games and 3.11M logged turns}, and by hand, where I finished
-\tbf{2nd in the human track}. The agent is ${\approx}2{,}300$ lines of
-Python, one closed-form policy per family behind 114 parameters, with no learning
+\tbf{2nd in the human track}. The three policies are ${\approx}2{,}300$ lines of
+Python, one closed form per family, behind 114 parameters, with no learning
 and no language model. My central finding is methodological and negative:
 \tbf{GLEE's percentile-Elo cannot resolve the effects entrants are trying to
 produce}. Five \emph{byte-identical} builds, polled simultaneously for 8.6 hours

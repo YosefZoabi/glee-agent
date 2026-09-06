@@ -143,6 +143,52 @@ def floor_accept_share(state: dict, slot: str) -> float:
     return float(P.min_accept_share)
 
 
+
+def open_converge_share(state: dict) -> float | None:
+    """Even-split convergence for a game the server will zero out at the cap.
+
+    Open-horizon games run to `open_horizon_cap` and pay BOTH sides $0 if nobody
+    signs. Measured: 559 of our open games reached rounds 90-99 and 80.1% of them
+    ended in exactly that no-deal -- 448 games, all paying nothing.
+
+    The old safety valve only fired inside `endgame_rounds` of the cap, i.e.
+    round 97, which is far too late to negotiate anything. This walks us to an
+    even split over `open_converge_from`..`open_converge_by` and holds there, so
+    there are ten rounds in which a deal can actually be struck.
+
+    Returns None before the convergence starts, leaving the normal schedule
+    untouched for the games that resolve early -- which is most of them.
+    """
+    if not P.open_converge_on:
+        return None
+    if rounds_left(state, 0) is not None:
+        return None                      # bounded game: it has its own endgame
+    rnd = int(number(state, "round", 1) or 1)
+    start, end = int(P.open_converge_from), int(P.open_converge_by)
+    if rnd < start:
+        return None
+    floor_by = int(P.open_converge_floor_by)
+    if rnd >= floor_by:
+        # Past here a live offer beats the $0 that running out pays, and the
+        # observed cap is round 96, not the 99 we assume elsewhere.
+        return float(P.endgame_floor)
+    if rnd >= end:
+        # Keep falling from the even split to the floor rather than parking at
+        # 0.50: the opponent in the measured game sat at 0.452 for 85 rounds and
+        # a bar of exactly 0.50 books a zero against him every time.
+        span2 = max(1, floor_by - end)
+        f2 = (rnd - end) / span2
+        lo2 = float(P.endgame_floor)
+        return float(P.open_converge_share) + (lo2 - float(P.open_converge_share)) * f2
+    # Walk from `open_converge_open_share` at `from` to an even split at `by`,
+    # so there are real rounds in which to meet rather than one cliff.
+    span = max(1, end - start)
+    frac = min(1.0, (rnd - start) / span)
+    hi = float(P.open_converge_open_share)
+    lo = float(P.open_converge_share)
+    return hi + (lo - hi) * frac
+
+
 def _continuation_value(state: dict, slot: str) -> float:
     """Our share of the pot, in today's dollars, if we reject and counter.
 
@@ -571,6 +617,9 @@ def _make_offer(game: dict) -> dict:
         if pick >= 0.0:
             demand = float(pick)
 
+    conv = open_converge_share(state)
+    if conv is not None:
+        demand = min(demand, conv)
     demand = clamp(demand, 0.0, 1.0 - P.min_opponent_share)
 
     mine, theirs = split_exactly(money, demand)
@@ -754,6 +803,9 @@ def _make_decision(game: dict) -> dict:
         # last round and we book a zero rather than take what is on the table.
         # Mirrors the bounded endgame exactly -- collapse to the floor as the
         # road runs out, then to nothing on the final round itself.
+        conv = open_converge_share(state)
+        if conv is not None:
+            threshold = min(threshold, money * conv)
         to_cap = int(P.open_horizon_cap) - int(number(state, "round", 1) or 1)
         if to_cap <= P.endgame_rounds:
             threshold = min(threshold, money * P.endgame_floor)

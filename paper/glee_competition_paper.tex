@@ -1,0 +1,602 @@
+% =====================================================================
+%  Below the Noise Floor
+%  GLEE Competition paper -- IAB Workshop, NeurIPS 2026
+%  Agent ID: 7aidara_Gamma  (agent track, 6th place)
+%
+%  BUILD
+%    Put the official neurips_2026.sty beside this file, then
+%      pdflatex glee_competition_paper   (twice)
+%    Without it the preamble falls back to a geometry-matched article
+%    class (5.5in x 9.0in text block) so the draft still compiles.
+%
+%  PAGE LIMIT
+%    Main body = pages 1-4, ending at \section{Conclusion}.
+%    References are unlimited. Everything after \appendix is
+%    SUPPLEMENTARY -- delete it if the chairs enforce "references only".
+% =====================================================================
+\documentclass{article}
+
+% Preserve the supplied non-anonymous preprint presentation.
+% Competition-track anonymity requirements must be checked at submission.
+\IfFileExists{neurips_2026.sty}{%
+  \usepackage[preprint]{neurips_2026}%
+}{%
+  % Same 5.5in x 9.0in text block, so a draft still paginates faithfully if the
+  % official style file is missing.
+  \usepackage[letterpaper,margin=1.5in,top=1.0in,bottom=1.0in]{geometry}
+  \usepackage{times}
+  \typeout{*** neurips_2026.sty not found -- fallback geometry in use ***}
+}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% With T1 encoding and no Type 1 T1 typewriter face installed, LaTeX silently
+% substitutes bitmap (Type 3) fonts for every \texttt. Those print badly and
+% arXiv rejects them. Latin Modern Mono is a real Type 1 T1 face and is
+% visually near-identical; setting only \ttdefault leaves the style's Times
+% body font alone.
+\renewcommand{\ttdefault}{lmtt}
+
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{float}
+\setcitestyle{numbers,square,comma}
+\usepackage{graphicx}
+
+% hyperref must be loaded LAST so it can patch the packages above; it also
+% provides \url, so the separate url package is not needed. Neither the NeurIPS
+% style nor this preamble configured it before, which left every citation and
+% cross-reference a link with no visible affordance: clickable in principle, but
+% invisible and only as wide as the bracketed number.
+\usepackage{hyperref}
+\definecolor{linknavy}{HTML}{1F3A68}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=linknavy,
+  citecolor=linknavy,
+  urlcolor=linknavy,
+  pdftitle={Below the Noise Floor: A Deterministic GLEE Agent and the Measurement Problem It Exposed},
+  pdfauthor={Yosef Zoabi},
+}
+
+\newcommand{\tbf}[1]{\textbf{#1}}
+\newcommand{\tsm}[1]{\texttt{\small #1}}
+
+% --- styles used by fig_noise.tex ------------------------------------
+\definecolor{c1c}{HTML}{2F6F8F}
+\definecolor{c2c}{HTML}{C2632B}
+\definecolor{c3c}{HTML}{6C8B3C}
+\definecolor{c4c}{HTML}{8B5E9C}
+\definecolor{c5c}{HTML}{B03A48}
+\definecolor{inkc}{HTML}{3A3A3A}
+\tikzset{
+  gridline/.style={draw=black!12,line width=0.35pt},
+  axline/.style={draw=black!45,line width=0.5pt},
+  axlab/.style={font=\scriptsize,text=black!60},
+  ptlab/.style={font=\scriptsize\bfseries},
+  note/.style={font=\scriptsize,text=inkc,inner sep=1pt},
+  band/.style={fill=black!7},
+  spreadarrow/.style={draw=inkc,line width=0.7pt,|<->|,>=stealth},
+  c1/.style={draw=c1c}, c2/.style={draw=c2c}, c3/.style={draw=c3c},
+  c4/.style={draw=c4c}, c5/.style={draw=c5c},
+}
+
+\title{Below the Noise Floor: A Deterministic GLEE Agent\\
+       and the Measurement Problem It Exposed}
+
+\author{%
+  Yosef Zoabi\\
+  \texttt{yosef.zoabi@campus.technion.ac.il}\\
+  \texttt{\small GLEE Agent ID \texttt{edb1db91303e} (7aidara\_Gamma)}\\
+  \texttt{\small 6th agent track, \textbf{2nd} human track. \href{https://github.com/YosefZoabi/glee-agent}{github.com/YosefZoabi/glee-agent}}
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+I study the difficulty of evaluating small strategy changes in a live economic-game
+competition through a deterministic, LLM-free agent. The agent placed sixth in the
+GLEE agent track; its development fleet logged 264,432 games across bargaining,
+negotiation and persuasion. In a simultaneous 8.6-hour comparison, five identical
+policy builds accumulated approximately 3,000 games each yet differed by as much
+as 88 overall rating points and 293 within a game family. This documents substantial
+leaderboard dispersion without a policy change, while leaving the contributions of
+initialization, matchmaking and a changing reference pool unresolved. Decision-level
+replay and terminal acceptance counterfactuals help investigate the behavior behind
+these scores: some interventions changed no actions, while transcript inspection
+exposed message-parser and termination-limit failures. An observational comparison
+with my second-place human-track play shows different participation behavior, but
+does not isolate message-understanding ability. The results motivate simultaneous
+controls, explicit rating-model assumptions and behavioral audits when evaluating
+small interventions during short competition windows. Code and analysis scripts
+are public; full empirical reproduction depends on the underlying game records.
+\end{abstract}
+
+\section{Introduction}
+GLEE~\cite{shapira2024glee} evaluates strategic interaction in bargaining,
+negotiation and persuasion. Its competition provides a setting in which to ask a
+practical question: \emph{how can an entrant distinguish a useful policy change
+from a noisy score change?} I address this through \textsc{7aidara\_Gamma}, a
+deterministic agent that finished sixth with an overall rating of 2360.8, and
+through my own human-track play, which finished second.
+
+The contribution is an empirical case study of evaluation and behavior rather
+than a new equilibrium solution. Automated-negotiation research already studies
+agent evaluation, modular strategies and acceptance conditions~\cite{anac2011,baarslag2014decoupling,baarslag2013acceptance};
+uncertainty in benchmark comparisons is also an established concern~\cite{agarwal2021}.
+Here, five simultaneous identical-policy controls reveal rating dispersion in a
+live competition, and offline audits distinguish changed behavior from changes
+that never affected an action. Failed experiments and implementation errors are
+part of the evidence, not merely development history.
+
+\section{The agent and its operating assumptions}
+A dispatcher routes games to three Python policies (858 / 660 / 781 lines),
+configured by 114 tunables. Parameters are fixed during a run; within-game state
+and belief updates are deterministic given the observed history. Seller
+randomization is seeded from the game ID and round. A safety layer repairs
+invalid actions and supplies a legal fallback after an exception. The reference
+build is covered by 472 behavioral tests.\footnote{\textbf{LLM usage.} The competition
+agent calls no language model. I used LLM coding assistance for analysis scripts
+and for drafting and revising the paper.}
+
+\textbf{Bargaining.} The policy uses the infinite-horizon proposer-share anchor
+$(1-\delta_{\rm them})/(1-\delta_{\rm us}\delta_{\rm them})$~\cite{rubinstein1982},
+with empirical floors, concession rules and explicit endgame handling. This is a
+heuristic benchmark, not a best-response guarantee against arbitrary opponents.
+Finite-horizon equilibrium predictions depend on the remaining horizon and seat;
+the agent instead exploits the empirically favorable final-proposer position
+(91.9\% agreement in a 1,415-game cohort), while accounting for termination risk.
+
+\textbf{Negotiation.} Observed values came from $(80,100,120,150)$ scaled by
+$\{1,10^2,10^4\}$, with both players on the same scale. The policy therefore
+prices at possible tradable rungs. Independent uniform draws on that ladder
+predict positive surplus in $6/16=37.5\%$ of value pairs; independence of roles
+alone would not imply that rate. When observed information rules out profitable
+trade, the policy walks away.
+
+\textbf{Persuasion.} Consistent with GLEE's documented payoff structure, the
+competition seller received the full price on a sale regardless of quality
+(checked over 1,829 sold rounds). For a buyer who trusts a known recommendation
+policy and purchases at posterior threshold $\tau$, recommending every high unit
+and a fraction $q$ of low ones gives
+$\Pr(H\mid\mathrm{recommend})=p/[p+(1-p)q]$ and
+$q_{\max}=\min\{1,p(1-\tau)/[\tau(1-p)]\}$.
+Because GLEE lacks commitment, this Bayesian-persuasion threshold~\cite{kamenica2011bayesian}
+is a heuristic starting point, not a guarantee of optimality. The seller ramps its
+budget with the horizon. The buyer combines message parsing with within-game
+purchase outcomes and recommendation frequency; quality is hidden after a decline.
+
+\section{Identical policies, different leaderboard histories}
+Five byte-identical builds were polled together for 8.6 hours, producing 45
+simultaneous snapshots over approximately 3,000 games per agent. The overall
+min--max spread averaged 48.1 points and reached 88.0; the largest within-family
+spread was 292.9 (Figure~\ref{fig:noise}). These are descriptive spreads, not
+confidence intervals. The five agents had different initial ratings and match
+histories, and successive polls are dependent. The experiment measures their
+joint effect with sampling and pool changes, rather than isolating one source
+of noise.
+
+\begin{figure}[t]
+\centering
+\input{fig_noise.tex}
+\caption{Overall ratings of five identical policy builds over 8.6 hours.
+Shading is the observed min--max envelope, not an uncertainty interval.
+The mean spread is 48.1 points and its maximum is 88.0. Initial rating states
+were not reset.}
+\label{fig:noise}
+\end{figure}
+
+Competition scoring compares payoffs within a configuration and role and adjusts
+for opponent strength. For interpreting late-stage updates, I used the simplified
+EMA model $R_{t+1}=(1-\eta)R_t+\eta g_t$, with $\eta\approx0.002$ inferred from
+rating deltas and $g_t$ denoting an adjusted game target. At constant $\eta$, its
+half-life is $\log(0.5)/\log(1-\eta)\approx346$ family games. Under independent,
+stationary targets, its effective sample size is $(2-\eta)/\eta=999$; lifetime
+game volume therefore need not describe the information in the current rating.
+These are model implications, not a reconstruction of every server update.
+
+The reference pool changes as games enter it, making unmatched cross-time
+comparisons confounded. Selecting or freezing a high-scoring slot also makes
+stopping time part of the evaluation protocol. A further distinction concerns
+the outcome being tested: for consecutive family updates,
+\mbox{$\overline{\Delta R}=(R_{\rm end}-R_{\rm start})/n$}.
+Mean rating change therefore tends toward zero as a rating settles, even for
+a strong policy. An IID calculation based on such deltas cannot by itself
+establish a sample requirement for detecting a difference in policy strength
+(Appendix~\ref{app:measurement}).
+
+\section{Behavioral measurements beyond the displayed rating}
+\textbf{Terminal acceptance counterfactuals.} An available offer can be evaluated
+exactly at its decision point: accepting banks
+$\mathrm{share}\,\delta^{r-1}$. Comparing that value with the realized continuation
+made 23,617 refusals informative about acceptance rules, including continuations
+ending without agreement. This is a local, retrospective comparison; it does not
+identify the value of every alternative policy or prove ex-ante optimality.
+Repeated refusals within one game share an outcome.
+
+\textbf{Decision-level replay.} The reference policy reproduced 4,272 of 4,272
+bargaining and 13,056 of 13,056 negotiation decisions in the audited cohorts.
+Replay then counted actions changed by a candidate flag, rather than how often
+its condition held. One condition fired on 43\% of eligible games yet changed
+0 of 13,056 decisions; another changed 0 of 13,479. Exact replay validates the
+implementation on logged states, not the outcome of unobserved trajectories.
+
+\textbf{Exploratory break-even fits.} Regressing rating delta on banked payoff
+within a cell supplied diagnostic zero crossings (Appendix
+Table~\ref{tab:breakeven}). Slopes were positive in 58 of 64 cells, with median
+$R^2=0.60$ and split-half correlation $r=0.741$. These describe regularity in
+the logged sample. A root depends on rating history, opponent adjustments and
+the reference pool; it is not generally a recovered field median. A fourth
+diagnostic estimates aggregate quality among declined persuasion rounds from
+the known prior (Appendix~\ref{app:lim}).
+
+\section{Interventions and implementation failures}
+Across 30+ interventions and 49 runs, the clearest improvements concerned
+implementation repairs and structural policy changes (Appendix
+Table~\ref{tab:ledger}). Their evidence types differ; none of the empirical
+comparisons alone establishes game-theoretic dominance. Seven consecutive tuning
+arms yielded no reliable improvement in the comparisons used. A seller lie-rate
+arm also showed no reliable difference across three runs ($t=-0.29$), which does
+not establish equivalence.
+
+Transcript inspection found purchases following messages such as ``Not this
+one\ldots pass this round.'' The parser recognized ``not this round'' but not
+``not this one'' and interpreted unmatched text as a recommendation. Re-scoring
+123,700 buyer rounds reclassified 270 purchases, 258 of them low quality.
+Another transcript exposed an acceptance gate opening at round 97 in negotiations
+that terminated at 96. A separate message intervention changed take-up from
+0.689 to 0.693; that observation does not establish that language generally has
+no effect.
+
+On the final morning, a fleet-wide concession change was followed by drops of
+100--385 negotiation rating points over five hours. Without a concurrent
+untreated control, the full decline cannot be attributed to the parameter alone.
+Operationally, the lesson is to retain a control. Abandonment was also clustered:
+80 of 109,881 rated games, with 78 in seven clock hours. Their recorded deltas
+averaged $-6.76$ and summed to about $-541$; the sum is not their persistent
+effect on an EMA rating.
+
+\section{Agent Behavior Analysis}
+\textbf{Observed behavior.} Bargaining settled at median round 2, with 1.5\%
+no-deals and mean banked share 0.429. Negotiation walked away in 79.8\% of
+untradable seats and agreed in 20--24\% of hidden-value games versus 85--89\%
+with complete information. The persuasion buyer bought 17.4 units per game
+where buying blind had positive expected value, versus 2.2 where it did not.
+These are sample descriptions, not controlled treatment effects.
+
+\textbf{Design alignment and failures.} The 472 tests encode intended actions
+in named regimes. The reference snapshot passed them; the final-night working
+tree, carrying experimental flags, failed 27. Together with replay, these tests
+check implementation consistency rather than utility optimality. Four recurring
+deviations were unreachable rules, a gate keyed to the wrong termination limit,
+a permissive parser default and excessive last-round concession. In one bounded
+negotiation cohort, 403 of 469 seller games reached a round-10 agreement at low
+surplus (Appendix Table~\ref{tab:endgame}). Agreement rate alone concealed that
+behavior because capitulation still counted as a deal.
+
+\section{An observational same-author human baseline}
+I played 2,690 rated human-track games and finished second. Sharing the game
+families and opponent pool makes a useful case study, but does not match exact
+opponents, messages or times. Table~\ref{tab:human} compares shared bargaining
+cells and pooled persuasion regimes. Bargaining equally weights retained cells
+matched on horizon type, seat and discount factors; persuasion pools by $mp$,
+so within-regime configuration composition may still differ.
+
+\begin{table}[t]
+\centering\footnotesize
+\caption{Observational human--agent comparison. Bargaining: mean banked share.
+Persuasion: payoff per game in product-price units; $t$ has Welch's standard-error
+form, signed human minus agent, without dependence adjustment. Persuasion rows
+contain 48--92 human and 4,729--9,467 agent games.}
+\label{tab:human}
+\begin{tabular}{@{}lrrr@{\hspace{1.5em}}lrrr@{}}
+\toprule
+\multicolumn{4}{@{}c}{\textbf{Bargaining (known horizon)}} &
+\multicolumn{4}{c@{}}{\textbf{Persuasion (buyer)}}\\
+\cmidrule(r{1.5em}){1-4}\cmidrule(l){5-8}
+seat & cells & human & agent & regime & human & agent & $t$\\
+\midrule
+player 1 & 14 & 0.444 & 0.447 & $mp>1$ & $+24.22$ & $+22.10$ & $+1.31$\\
+player 2 & 13 & 0.512 & 0.720 & $mp=1$ & $+2.99$ & $+2.56$ & $+0.56$\\
+ & & & & $mp<1$ & $-0.61$ & $+0.18$ & $-2.44$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Among purchased items, the human's high-quality rate was 0.738 over 2,745
+purchases and the agent's was 0.725 over 59,603. These rates concern selected
+purchases, not message-reading accuracy. The agent's higher bargaining share in
+the known-horizon second seat, and my negative mean persuasion payoff where
+$mp<1$, are consistent with different participation and acceptance behavior.
+They do not identify discipline rather than perception as a causal mechanism,
+nor support a general claim about humans versus machines.
+
+\section{Limitations and conclusion}
+This is one account, one human participant and a changing competition pool.
+The identical-policy experiment does not reset rating history or isolate
+matchmaking; exploratory fits and pooled tests do not remove all dependence or
+selection. Repeated tuning and flexible cell filters increase the risk of
+selective findings. The public repository provides policies, tests and analysis
+scripts, but full empirical reproduction requires private game records and
+deployment metadata; anticipated organizer data do not by themselves resolve
+that gap.
+
+The useful finding is narrower than a universal failure of leaderboard
+evaluation: substantial rating dispersion occurred without policy changes,
+and behavioral audits exposed failures that score summaries alone obscured.
+Simultaneous controls, explicit estimands, replay and transcript inspection
+provide complementary evidence when live experimental windows are short.
+\label{endmain}
+
+
+\clearpage
+\bibliographystyle{plain}
+\begin{thebibliography}{99}\small
+
+\bibitem{anac2011}
+T.~Baarslag, K.~Fujita, E.~H. Gerding, K.~Hindriks, T.~Ito, N.~R. Jennings,
+C.~Jonker, S.~Kraus, R.~Lin, V.~Robu, and C.~R. Williams.
+Evaluating practical negotiating agents: results and analysis of the 2011
+international competition.
+\emph{Artificial Intelligence}, 198:73--103, 2013.
+
+\bibitem{baarslag2013acceptance}
+T.~Baarslag, K.~Hindriks, and C.~Jonker. Acceptance conditions in automated
+negotiation. In \emph{Complex Automated Negotiations: Theories, Models, and
+Software Competitions}, volume 435 of \emph{Studies in Computational
+Intelligence}, pages 95--111. Springer, 2013.
+
+\bibitem{baarslag2014decoupling}
+T.~Baarslag, K.~Hindriks, M.~Hendrikx, A.~Dirkzwager, and C.~Jonker.
+Decoupling negotiating agents to explore the space of negotiation strategies.
+In \emph{Novel Insights in Agent-based Complex Automated Negotiation}, volume
+535 of \emph{Studies in Computational Intelligence}, pages 61--83. Springer,
+2014.
+
+\bibitem{baarslag2016survey}
+T.~Baarslag, M.~J.~C. Hendrikx, K.~V. Hindriks, and C.~M. Jonker.
+Learning about the opponent in automated bilateral negotiation: a comprehensive
+survey of opponent modeling techniques.
+\emph{Autonomous Agents and Multi-Agent Systems}, 30(5):849--898, 2016.
+
+\bibitem{crawford1982strategic}
+V.~P. Crawford and J.~Sobel. Strategic information transmission.
+\emph{Econometrica}, 50(6):1431--1451, 1982.
+
+\bibitem{kamenica2011bayesian}
+E.~Kamenica and M.~Gentzkow. Bayesian persuasion.
+\emph{American Economic Review}, 101(6):2590--2615, 2011.
+
+\bibitem{myerson1983}
+R.~B. Myerson and M.~A. Satterthwaite. Efficient mechanisms for bilateral trading.
+\emph{Journal of Economic Theory}, 29(2):265--281, 1983.
+
+\bibitem{ochsroth1989}
+J.~Ochs and A.~E. Roth. An experimental study of sequential bargaining.
+\emph{American Economic Review}, 79(3):355--384, 1989.
+
+\bibitem{rubinstein1982}
+A.~Rubinstein. Perfect equilibrium in a bargaining model.
+\emph{Econometrica}, 50(1):97--109, 1982.
+
+\bibitem{shapira2024glee}
+E.~Shapira, O.~Madmon, I.~Reinman, S.~J.~Amouyal, R.~Reichart, and M.~Tennenholtz.
+GLEE: A unified framework and benchmark for language-based economic environments.
+\emph{arXiv:2410.05254}, 2024. \url{https://arxiv.org/abs/2410.05254}
+
+\bibitem{agarwal2021}
+R.~Agarwal, M.~Schwarzer, P.~S.~Castro, A.~C.~Courville, and M.~G.~Bellemare.
+Deep reinforcement learning at the edge of the statistical precipice.
+\emph{Advances in Neural Information Processing Systems}, 34:29304--29320, 2021.
+\url{https://proceedings.neurips.cc/paper/2021/hash/f514cec81cb148559cf475e7426eed5e-Abstract.html}
+\end{thebibliography}
+
+
+\clearpage
+\appendix
+\section{Supplementary behavioral evidence}
+\setcounter{table}{0}
+\renewcommand{\theHtable}{A\arabic{table}}
+\renewcommand{\thetable}{A\arabic{table}}
+
+\begin{table}[H]
+\centering\small
+\caption{Buyer-template history and high-quality rate on the next purchase
+(source cohort: 6,185 buyer replays). Rates are conditioned on purchases and
+template history; cohort size is not the event count in each row. The all-low
+three-times estimate is below every configured immediate break-even threshold
+$1/m$, motivating a veto heuristic rather than proving dominance.}
+\label{tab:ladder}
+\begin{tabular}{@{}lrlr@{}}
+\toprule
+Prior record of template & hit rate & Prior record & hit rate\\
+\midrule
+no prior & 70.4\% & all-low $\times1$ & 33.8\%\\
+all-high $\times1$ & 81.3\% & all-low $\times2$ & 19.3\%\\
+all-high $\times2$ & 84.8\% & all-low $\times3$ & 5.3\%\\
+all-high $\times3$ & 91.2\% & mixed & 63.7\%\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Development-fleet volume, 12--30 August 2026, recovered from local
+turn logs. These are fleet totals, not the games of the single ranked slot.}
+\label{tab:volume}
+\begin{tabular}{@{}lrlr@{}}
+\toprule
+Family & unique games & Fleet total & \\
+\midrule
+Bargaining & 89,641 & logged turns & 3,114,356\\
+Negotiation & 76,490 & unique games & 264,432\\
+Persuasion & 98,301 & reconstructable runs & 49\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Exploratory break-even diagnostics from 7,104 known-horizon and
+31,208 open-horizon bargaining games. A fitted zero crossing is conditional on
+the observed rating process; it is not generally a field median. A separate
+26,773-decision replay cohort had 98.79\% control fidelity and exposed a gate
+as low as 0.118 in the known-horizon player-1 regime. It is distinct from the
+exact-replay cohorts reported in the main text.}
+\label{tab:breakeven}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+Horizon & Seat & Mean banked & Fitted zero crossing & Difference\\
+\midrule
+open & $p_1$ & 0.530 & 0.476 & $+0.054$\\
+open & $p_2$ & 0.501 & 0.463 & $+0.038$\\
+known 12 & $p_1$ & 0.435 & 0.816 & $-0.381$\\
+known 12 & $p_2$ & 0.687 & 0.449 & $+0.239$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Selected policy changes and their diagnostic evidence. Evidence
+types and cohorts differ: live comparisons, local replay and transcript
+reclassification do not establish a common replication standard or
+game-theoretic dominance. Standardized statistics are reported as exploratory
+effect-to-noise summaries.}
+\label{tab:ledger}
+\begin{tabular}{@{}p{0.27\linewidth}p{0.69\linewidth}@{}}
+\toprule
+Change & Evidence\\
+\midrule
+Complete-info ultimatum & Larger demand in a one-round known-surplus seat;
+reported $+3.42\sigma$, $n=214$. Acceptance remains an opponent decision.\\
+Rung-aware pricing & Two reported live comparisons: $+3.9\sigma$ and
+$+4.1\sigma$.\\
+Free-clock accept floor & Observed gain $+0.0458$ of pot in 108 games,
+reported $7.7\sigma$, with none worse in that cohort. No discounting does not
+eliminate termination or rejection risk.\\
+Open-horizon cap response & Replay identified 11 of 11 examined zero-payoff
+games affected by the termination-limit failure.\\
+Negative-signal parser & 270 purchases reclassified; 258 (95.6\%) low quality,
+versus a 27.5\% overall purchase-conditioned low-quality rate.\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\caption{Selected complete-information seller cells from a 10,740-game
+negotiation analysis. The displayed seller cohorts contain 957 games; the
+469-game horizon-10 cohort is partitioned below. The association between late
+settlement and low payoff does not identify the causal effect of waiting.}
+\label{tab:endgame}
+\begin{tabular}{@{}lrlr@{}}
+\toprule
+Cell / outcome & $n$ & Payoff measure & rating / game\\
+\midrule
+$\mathrm{max\_rounds}=1$ & 488 & asks 0.991 of surplus; 99.2\% sign & $+6.10$\\
+$\mathrm{max\_rounds}=10$ & 469 & partitioned below & $-4.63$\\
+\quad closed by round 8 & 66 & banked / buyer value: 0.2365 & $+5.9$\\
+\quad agreed in round 10 & 403 & banked / buyer value: 0.0433 & $-6.4$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Additional methods and limits}
+\label{app:lim}
+\textbf{Aggregate inference for declined products.} Let $p$ be the prior
+probability of high quality in a persuasion cell, $b$ the purchased fraction,
+and $h$ the observed high-quality rate among purchases. The population identity
+$p=bh+(1-b)q_{\rm declined}$ motivates
+\[
+\widehat q_{\rm declined}=\frac{p-\widehat b\,\widehat h}{1-\widehat b},
+\qquad \widehat b<1.
+\]
+This uses the prior in expectation, not the realized total number of high-quality
+units in a finite sample. It estimates an aggregate rate and cannot recover the
+quality of a particular declined product. Near-complete purchasing makes the
+estimate unstable; sampling variation can place it outside $[0,1]$. At $b=0$
+it supplies no information beyond the prior. It should not be used as evidence
+about a single hidden round or as a precision estimate without uncertainty.
+
+\textbf{Simulation and memory.} A local bargaining simulator fitted to 15,788
+games and eight adversarial archetypes reproduced per-cell median settlement
+rounds but overestimated payoff by approximately 0.03 of the pot. It was used
+for candidate screening rather than as evidence of a live treatment effect.
+Opponent profiles showed split-half correlation $r=0.786$, but only 19
+opponent-by-cell profiles had at least 25 purchases in each half. Identity was
+withheld in 49.9\% of games, and no quality was revealed in 42,616 unbought
+rounds. Purchase selection and sparse profiles limit the conclusions for
+cross-game opponent modeling~\cite{baarslag2016survey}.
+
+\textbf{Operational versioning.} Experimental flags written into a working
+tree, entry points outside a copied package and abrupt mid-game termination
+can make intended and deployed behavior differ. A reference build passing
+tests does not establish that every concurrent slot ran that build. Exact
+replay is tied to the logged cohort and policy version.
+
+\section{Aggregation and outcome-dependent selection}
+\label{app:simpson}
+A candidate rule used whether a seller had previously declined an opportunity
+to sell. Pooled across fifteen $(m,p)$ cells, later low-quality rates were
+0.285 / 0.287 / 0.286 / 0.315 for sellers declining 0 / 1 / 2 / 3--4 of their
+first four opportunities. Within $(m=1.20,p=0.80)$, the corresponding values
+were 0.160 / 0.102 / 0.081 / 0.069 (cell sample $n=9,932$), against an immediate
+break-even low-quality rate $1-1/m=0.167$. This illustrates how configuration
+mixture can mask a within-cell pattern; it is not evidence of a uniform reversal
+in every cell. The rule was not deployed.
+
+Separate analyses were affected by outcome-dependent inclusion: deal rates
+computed only among closed deals, quality estimates conditional on purchases,
+and abandonment estimates from logs missing a completed final turn. These are
+selection problems, distinct from aggregation over cells. One persuasion arm
+also changed from $-3.11\sigma$ to $-0.82\sigma$ to $+3.02\sigma$ when the
+minimum-count filter admitted 3, 33 or 44 cells. This sensitivity motivates
+specifying inclusion rules before inspecting outcomes and treating retrospective
+screening statistics as exploratory.
+
+\section{Rating-model and reproducibility boundaries}
+\label{app:measurement}
+An idealized independent two-arm comparison with equal variance $\sigma^2$
+and equal sample size $n$ has standard error $\sigma\sqrt{2/n}$. Requiring an
+effect $\Delta$ to equal three standard errors gives
+$n=18\sigma^2/\Delta^2$. Earlier screening applied this arithmetic to
+per-game rating deltas, whose observed standard deviations were
+4.84 / 4.42 / 4.44 over 120,023 joined games. At $\Delta=0.25$, it yields
+roughly 5,600--6,700 observations per arm using unrounded estimates. This is
+an IID sensitivity illustration, not a validated policy-strength detection
+bound: deltas depend on current ratings and telescope over a run, and the
+criterion does not specify statistical power. Fixed-reference game scores or
+properly reconstructed game targets, with time and configuration controls,
+would provide a better-defined comparison.
+
+Similarly, a fitted zero rating-delta crossing is not generally the median of
+the current payoff distribution. Rating history, opponent strength and a
+changing reference pool enter that relationship. Comparisons with equilibrium
+predictions additionally require the correct initial seat and horizon; an
+infinite-horizon proposer share must not be treated as the equilibrium payoff
+for all seats and finite horizons.
+
+For a constant-$\eta$ EMA, perturbing one game target by $d$ changes the rating
+by $\eta d(1-\eta)^k$ after $k$ later games if those later targets remain fixed.
+The recorded sum of abandonment deltas therefore cannot be interpreted as a
+final-standing effect. A persistent stream of abandonments and a finite cluster
+near stopping time are different estimands; no precise persistent-cost estimate
+is claimed here.
+
+The public release includes policy code, tests and analysis scripts. Its scripts
+require joined game records and human-history exports that are not distributed
+alongside the code because they include opponents' transcripts. Organizers have
+indicated plans to release game records, but local deployment flags, rating-poll
+snapshots, filter choices and joins are additional provenance requirements.
+The released method is inspectable; the empirical results are not yet a
+one-command reproduction. Tables retain their analysis-specific cohorts, and
+aggregate counts should not be substituted for the denominators of individual
+comparisons.
+\end{document}

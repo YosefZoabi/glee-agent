@@ -19,14 +19,14 @@ badly wrong against the field, which converges near an even split. So the live
 policy anchors on the parity-free infinite-horizon share, which is what actually
 measures bargaining power (a patient player earns more).
 
-What parity does buy us is a guarantee, and that is a different thing from a
-prediction. If the last proposal of the game is ours, we can always refuse
-everything and make it: the responder is then choosing between our number and
-$0. `endgame_hold_value` prices that -- it is worth nearly the whole pot to a
-player who pays nothing for delay and nearly nothing to one bleeding 20% a
-round, because getting there costs our own inflation for every round we wait.
-It needs no assumption about how the opponent plays, which is what separates it
-from the finite-horizon recursion. Parity is also stable within a game: proposers
+Parity identifies the scheduled last proposer, not a guaranteed payoff.
+Reaching that proposal requires the game to continue, and the responder can
+still reject a positive offer. `endgame_hold_value` is an empirical continuation
+heuristic with discounting and an observed signing probability, not a minimax
+guarantee or a proof that delaying is optimal. A clock with delta=1 removes
+discount loss but does not remove termination, withdrawal or rejection risk.
+These comments describe design motivation; historical measurements are subject
+to the limitations in paper/AUDIT_NOTES.md. Parity is stable when proposers
 alternate, so if the last word is ours on one of our turns it is ours on all of
 them, and the demand does not oscillate.
 

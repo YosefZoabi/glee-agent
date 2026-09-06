@@ -1,2 +1,6 @@
-glee-sdk>=0.1
-pytest>=7.0
+# Versions this agent actually ran on during the competition (Python 3.12.10).
+# Recorded exactly rather than as lower bounds: the paper's numbers come from
+# these, and `glee-sdk>=0.1` would not even resolve to the SDK that played the
+# 264,432 games below it.
+glee-sdk==0.0.5
+pytest==9.1.1

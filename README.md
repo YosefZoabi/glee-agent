@@ -1,152 +1,124 @@
-# GLEE Competition agent
+# 7aidara_Gamma — GLEE competition agent and submitted paper
 
-An agent for the [GLEE Competition](https://glee-competition.com) agent track:
-one strategy module per game family, a dispatcher that routes each incoming game
-to the right one, and a safety layer that guarantees we never forfeit a game to a
-bug.
+[Read the submitted paper](paper/glee_competition_paper.pdf) ·
+[Paper sources and build](paper/README.md) ·
+[Analysis instructions](paper/analysis/README.md) ·
+[Audit notes](paper/AUDIT_NOTES.md)
 
-## Setup
+The agent finished sixth in the GLEE agent track; the author finished second in
+the human track. The development fleet logged 264,432 games across multiple
+builds, not all on the single ranked slot. The paper is an observational case
+study of rating dispersion and behavioral auditing, not a proof that leaderboard
+evaluation generally fails or that a deterministic agent is universally better.
 
-Python is not installed on this machine yet. Install it once:
+The submitted PDF's checksum is recorded in
+[submission.json](paper/submission.json). Analysis methods and data availability
+are described in the accompanying documentation.
 
-```powershell
-winget install Python.Python.3.12
-```
+## Agent
 
-Then, from this directory, in a new terminal:
+The agent calls no language model. Python policies handle bargaining,
+negotiation and persuasion, with deterministic within-game state updates and
+game-ID-seeded seller randomization. Parameters were tuned during development;
+“no language model” does not mean no adaptation or no empirical tuning.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+- Bargaining uses a Rubinstein-inspired anchor, empirical floors and endgame
+  rules. The infinite-horizon formula is not an equilibrium prediction for
+  every finite-horizon seat, and reaching the last proposal does not guarantee acceptance.
+- Negotiation uses the observed discrete valuation ladder and known surplus
+  where available. A 37.5% positive-surplus rate requires independent uniform
+  draws on the four-rung pool; independence of role assignment alone is insufficient.
+- Persuasion combines a commitment-inspired seller threshold heuristic with
+  a buyer's message parsing and within-game outcomes. GLEE's lack of commitment
+  prevents a general Bayesian-persuasion optimality claim. Purchase-conditioned
+  quality does not establish message-understanding accuracy.
 
-"GLEE_API_KEY=glee_your_key_here" | Out-File -Encoding utf8 .env
-python tools/check_setup.py      # proves the key works, plays nothing
-```
-
-`check_setup.py` calls `GET /api/agent/stats`, which is not competition-gated,
-so it verifies the key and the connection without entering a queue.
-
-## Running
-
-```powershell
-python main.py                                   # all three families
-python main.py --families bargaining negotiation # a subset
-python main.py --concurrency 8 --max-games 50    # bounded session
-```
-
-Stop with Ctrl-C. The queue is left explicitly on the way out — a stale queue
-entry still gets matched, and that game times out and dents the rating.
-
-Every turn is appended to `logs/turns-<date>.jsonl`.
-
-## Watching games
-
-There is no spectator page. The platform keeps the full transcript of every
-game — including games still in progress — on `GET /api/agent/games/{id}`, and
-[show_game.py](tools/show_game.py) renders it:
-
-```powershell
-python tools\show_game.py --list          # every game we have played
-python tools\show_game.py --list --live   # only games in progress right now
-python tools\show_game.py c8cf3c48        # full transcript; an id prefix is enough
-```
-
-That prints each offer, each message, and each accept/reject with both sides'
-payoffs — which is where a losing game explains itself. To follow a running
-session instead, tail the turn log:
-
-```powershell
-Get-Content .\logs\turns-20260813.jsonl -Wait -Tail 5
-```
+The runnable code uses the final-night configuration.
 
 ## Layout
 
-| Path | What it is |
+| Path | Purpose |
 | --- | --- |
-| [main.py](main.py) | CLI entry point: builds the client, runs the loop, leaves the queue |
-| [glee_agent/dispatcher.py](glee_agent/dispatcher.py) | The one function `client.run()` calls; routes by `game_family` |
-| [glee_agent/strategies/](glee_agent/strategies/) | One module per family, each exposing `play(game) -> action` |
-| [glee_agent/params.py](glee_agent/params.py) | Every strategy tunable, in one file |
-| [glee_agent/safety.py](glee_agent/safety.py) | `sanitize` repairs outgoing moves; `fallback` covers a crash |
-| [glee_agent/gamestate.py](glee_agent/gamestate.py) | Readers over the filtered `game_state` the server sends |
-| [glee_agent/gamelog.py](glee_agent/gamelog.py) | Append-only JSONL record of every decision |
-| [tools/check_setup.py](tools/check_setup.py) | Verify key and connectivity without playing |
-| [tools/show_game.py](tools/show_game.py) | Read back any game we played, move by move |
-| [tests/](tests/) | Strategy tests against synthetic games — no network, no SDK needed |
+| `main.py` | CLI game loop; running it can enter the live platform queue |
+| `glee_agent/` | Policies, parameters, dispatcher, state readers, safety, logging |
+| `tests/` | Historical reference expectations and analysis regression tests |
+| `tools/` | Setup check, transcript reader, post-mortem analysis |
+| `paper/` | Exact submitted PDF, matching NeurIPS 2026 sources, build/check script |
+| `paper/analysis/` | Corrected observational analysis code; inputs and limits documented |
+| `paper/change-register.html` | Incomplete historical notebook, with audit qualifications |
 
-Only [main.py](main.py) and [tools/check_setup.py](tools/check_setup.py) import
-`glee_sdk`, so the strategies and their tests run before the SDK is installed.
+## Setup and running
 
-```powershell
-python -m pytest
+Python 3.12 was used during the competition. The SDK is needed only for platform
+operations, not for the offline policy or analysis tests.
+
+```sh
+python -m venv .venv
+# Activate the virtual environment using your shell's command.
+pip install -r requirements.txt
+# Copy .env.example to .env and set your own key locally.
+python tools/check_setup.py
 ```
 
-## What the strategies do
+`check_setup.py` requests account statistics and does not play a game.
+Do not commit credentials or paste them into issues. Platform availability,
+limits, scoring behavior and competition dates may have changed.
 
-Everything below is scored the same way: the payoff becomes a percentile against
-the field on the *same configuration in the same role*, adjusted for opponent
-strength. Two consequences shape every decision here. A $0 no-deal sits at the
-bottom of that scale, so closing a mediocre deal beats holding out for a good one
-and missing. And configurations are drawn from a grid of 960 combinations, so
-nothing may be tuned to one game's numbers — the policies are written in terms of
-the pot, the horizon, and the valuations, never in absolute dollars.
+To operate an agent only when the platform permits it:
 
-**Bargaining** anchors on the infinite-horizon (Rubinstein) share, which is what
-actually measures bargaining power: the patient player earns more. It opens above
-that, concedes toward it as the horizon closes, and never concedes below a floor
-the field will realistically sign. The finite-horizon recursion is computed
-exactly in `proposer_share` but deliberately not used as the live anchor — it
-swings between roughly 0.25 and 0.91 with the parity of the horizon, which is
-correct only against an opponent playing the same equilibrium. The last two
-rounds are handled explicitly instead. It never walks away, because walking away
-pays exactly $0.
+```sh
+python main.py
+python main.py --families bargaining negotiation
+python main.py --concurrency 8 --max-games 50
+```
 
-**Negotiation** runs a concession schedule from an anchor toward a thin margin,
-clipped so it never prices below our own valuation and never un-concedes. When
-the game is complete-information, the zone of agreement is known exactly, so it
-opens just inside the opponent's limit instead of guessing; when the seller
-values the item above the buyer there is no such zone, and it walks away
-immediately — the right outcome, and a freed concurrency slot.
+Stop with Ctrl-C. The loop attempts to leave the queue; cleanup is not a guarantee
+that in-flight games cannot time out. Local turn logs may contain other
+participants' transcripts and should remain private.
 
-**Persuasion** gives the seller an explicit credibility budget: Bayesian
-persuasion says exactly what fraction of low-quality products can be recommended
-before a rational buyer stops believing recommendations. It spends under that
-budget, ramps up as rounds run out because reputation is only worth holding while
-there is a future to spend it in, and recommends everything on the final round.
-The buyer tracks how often recommendations actually delivered as a Beta posterior
-anchored on the prior, counting only rounds it bought — quality is hidden
-otherwise — and buys on a marginal expectation in the first rounds, because that
-purchase is the only way to price the rest of the game.
+## Tests and configuration provenance
 
-## Tuning
+```sh
+python -m pytest --agent-profile=reference
+python -m pytest tests/test_paper_analysis.py
+python -m pytest --agent-profile=final-night
+```
 
-[params.py](glee_agent/params.py) holds every knob, so a tuning experiment is a
-one-file diff. The turn logs are the evidence: they are also what the workshop
-paper's required "Agent Behavior Analysis" section is written from, which is why
-the persuasion seller's randomisation is seeded from the game id and round rather
-than a global RNG — a logged game replays to the same decisions.
+The default `reference` profile explicitly restores the parameter values from
+the preserved pre-final-night commit `84285c72751c2d24fa400082650dd7f207993bd4`,
+disables three later-added experimental gates, and exercises the historical
+472 test expectations. The reference profile is test-only; it does not alter
+the defaults used by `main.py`. The test summary identifies the selected profile.
 
-## Operational notes
+The `final-night` profile leaves the executable defaults untouched. Against
+the historical 472 expectations it produces **445 passes and 27 failures**.
+These disagreements are reported openly, not skipped or marked as expected
+failures. They include experimental defaults and changed behavior; they are
+not all evidence of crashes. Passing a reference suite is not proof of the
+optimality, deployment identity, or results of a competition build.
 
-- **Rating decay.** Above 1,800 an agent needs 100 games per family in the
-  trailing 48 hours or the rating bleeds hourly. Top-100 agents owe 10 games per
-  day per family. Both are volume requirements: plan on long sessions, not short
-  ones.
-- **Display vs. raw rating.** `stats()` returns the rating shrunk toward 1,000 by
-  `g / (g + 30)`. A raw 1,400 over 5 games shows as ~1,057. It is not a bug and
-  it converges.
-- **Crash-loop cooldown.** Three consecutive games lost to our own turn timeout
-  blocks queue joins for 30 minutes. `safety.py` exists to make that unreachable.
-- **Rate limit.** 60 requests/minute per agent. Raise `--concurrency` rather than
-  dropping `--poll-interval` when you want more throughput.
+Additional tests check the revised analysis, input validation, figure audit and
+submitted-file integrity using synthetic data, not private competition outcomes.
 
-## Not built yet
+## Evidence and limitations
 
-- A local self-play harness. Tuning currently costs real games; a faithful local
-  engine for the three families would let the schedules be searched offline.
-- An LLM strategy. The dispatcher takes any callable, so an LLM-backed family
-  drops in beside the rule-based ones — with the same `sanitize`/`fallback`
-  guarantee around it.
-- Opponent modelling across games. The turn logs carry the opponent name in the
-  half of games where identity is disclosed, which is the raw material for it.
+The strongest observations are simultaneous rating dispersion, exact replay on
+specified logged cohorts, and concrete parser/termination-limit failures.
+Initialization, changing opponents and reference pools confound the rating
+experiment. A mean rating delta is not a stationary measure of policy strength.
+The same-author human comparison does not isolate perceptual ability.
+
+The public analysis has no complete original joins/replay pipeline, raw rating
+polls, or complete run manifest. Anticipated organizer data do not automatically
+resolve deployment provenance or private-input gaps. See the
+[analysis README](paper/analysis/README.md) for what is actually executable.
+
+Historical operational observations (including timeout caps, rating/display
+rules and cooldowns) must not be mistaken for a current authoritative API
+specification. The [competition site](https://glee-competition.com/) is the
+organizer's source.
+
+## License
+
+MIT for software; manuscript and historical change register remain the author's
+copyright. See [NOTICE](NOTICE) for scope. The NeurIPS style retains its own terms.

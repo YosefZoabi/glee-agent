@@ -23,7 +23,10 @@ def main() -> int:
     except RuntimeError as error:
         print(f"FAIL  {error}")
         return 2
-    print(f"OK    key loaded ({key[:9]}...{key[-4:]})")
+    # Show only the trailing characters. The "glee_" prefix is public, so
+    # printing more of the head would disclose real key material in any
+    # terminal output that gets pasted into an issue or a screenshot.
+    print(f"OK    key loaded (glee_...{key[-4:]})")
 
     try:
         from glee_sdk import GleeClient

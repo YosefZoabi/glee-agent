@@ -5,11 +5,12 @@ history. The seller earns the price on every sale regardless of quality, so the
 temptation is to recommend everything -- and a buyer who notices stops buying,
 which is why reputation is the seller's real currency.
 
-Seller. Bayesian persuasion gives the exact size of the lie the buyer will
-tolerate. If the seller recommends every high-quality product and a fraction q
+Seller. A commitment-inspired threshold gives a heuristic recommendation budget.
+For a buyer who knows and trusts the policy, recommending every high-quality product and a fraction q
 of the low-quality ones, a buyer seeing a recommendation puts probability
 `p / (p + (1-p)q)` on high quality, and buys while that keeps expected value
-above the price. Solving for q gives the budget below. We spend under it (an
+above the price. Solving for q gives a bound capped at one; GLEE has no commitment,
+so this does not establish optimality against arbitrary buyers. We spend under it (an
 exactly-indifferent buyer often passes anyway), ramp it up as rounds run out
 because reputation is only worth holding while there is a future to spend it in,
 and recommend everything on the final round, where there is none.

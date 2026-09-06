@@ -1,0 +1,101 @@
+% =====================================================================
+%  Below the Noise Floor
+%  GLEE Competition paper -- IAB Workshop, NeurIPS 2026
+%  Agent ID: 7aidara_Gamma  (agent track, 6th place)
+%
+%  BUILD
+%    Put the official neurips_2026.sty beside this file, then
+%      pdflatex glee_competition_paper   (twice)
+%    Without it the preamble falls back to a geometry-matched article
+%    class (5.5in x 9.0in text block) so the draft still compiles.
+%
+%  PAGE LIMIT
+%    Main body = pages 1-4, ending at \section{Conclusion}.
+%    References are unlimited. Everything after \appendix is
+%    SUPPLEMENTARY -- delete it if the chairs enforce "references only".
+% =====================================================================
+\documentclass{article}
+
+% Preserve the supplied non-anonymous preprint presentation.
+% Competition-track anonymity requirements must be checked at submission.
+\IfFileExists{neurips_2026.sty}{%
+  \usepackage[preprint]{neurips_2026}%
+}{%
+  % Same 5.5in x 9.0in text block, so a draft still paginates faithfully if the
+  % official style file is missing.
+  \usepackage[letterpaper,margin=1.5in,top=1.0in,bottom=1.0in]{geometry}
+  \usepackage{times}
+  \typeout{*** neurips_2026.sty not found -- fallback geometry in use ***}
+}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% With T1 encoding and no Type 1 T1 typewriter face installed, LaTeX silently
+% substitutes bitmap (Type 3) fonts for every \texttt. Those print badly and
+% arXiv rejects them. Latin Modern Mono is a real Type 1 T1 face and is
+% visually near-identical; setting only \ttdefault leaves the style's Times
+% body font alone.
+\renewcommand{\ttdefault}{lmtt}
+
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{float}
+\setcitestyle{numbers,square,comma}
+\usepackage{graphicx}
+
+% hyperref must be loaded LAST so it can patch the packages above; it also
+% provides \url, so the separate url package is not needed. Neither the NeurIPS
+% style nor this preamble configured it before, which left every citation and
+% cross-reference a link with no visible affordance: clickable in principle, but
+% invisible and only as wide as the bracketed number.
+\usepackage{hyperref}
+\definecolor{linknavy}{HTML}{1F3A68}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=linknavy,
+  citecolor=linknavy,
+  urlcolor=linknavy,
+  pdftitle={Below the Noise Floor: A Deterministic GLEE Agent and the Measurement Problem It Exposed},
+  pdfauthor={Yosef Zoabi},
+}
+
+\newcommand{\tbf}[1]{\textbf{#1}}
+\newcommand{\tsm}[1]{\texttt{\small #1}}
+
+% --- styles used by fig_noise.tex ------------------------------------
+\definecolor{c1c}{HTML}{2F6F8F}
+\definecolor{c2c}{HTML}{C2632B}
+\definecolor{c3c}{HTML}{6C8B3C}
+\definecolor{c4c}{HTML}{8B5E9C}
+\definecolor{c5c}{HTML}{B03A48}
+\definecolor{inkc}{HTML}{3A3A3A}
+\tikzset{
+  gridline/.style={draw=black!12,line width=0.35pt},
+  axline/.style={draw=black!45,line width=0.5pt},
+  axlab/.style={font=\scriptsize,text=black!60},
+  ptlab/.style={font=\scriptsize\bfseries},
+  note/.style={font=\scriptsize,text=inkc,inner sep=1pt},
+  band/.style={fill=black!7},
+  spreadarrow/.style={draw=inkc,line width=0.7pt,|<->|,>=stealth},
+  c1/.style={draw=c1c}, c2/.style={draw=c2c}, c3/.style={draw=c3c},
+  c4/.style={draw=c4c}, c5/.style={draw=c5c},
+}
+
+\title{Below the Noise Floor: A Deterministic GLEE Agent\\
+       and the Measurement Problem It Exposed}
+
+\author{%
+  Yosef Zoabi\\
+  \texttt{yosef.zoabi@campus.technion.ac.il}\\
+  \texttt{\small GLEE Agent ID \texttt{edb1db91303e} (7aidara\_Gamma)}\\
+  \texttt{\small 6th agent track, \textbf{2nd} human track. \href{https://github.com/YosefZoabi/glee-agent}{github.com/YosefZoabi/glee-agent}}
+}
+
+\begin{document}
+\maketitle
+

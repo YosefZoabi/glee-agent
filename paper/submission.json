@@ -1,0 +1,13 @@
+{
+  "paper_status": "Submitted competition paper, 6 September 2026",
+  "submitted_pdf": "glee_competition_paper.pdf",
+  "sha256": "f916fe323968ca01be4c2f8ec860088f1b51f2f74db88d3e68bc223545d15097",
+  "source_files": [
+    "_head.tex",
+    "_body.tex",
+    "_tail.tex",
+    "fig_noise.tex",
+    "neurips_2026.sty"
+  ],
+  "raw_data_reanalysis": false
+}

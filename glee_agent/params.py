@@ -3,6 +3,11 @@
 Every knob the three strategy modules read lives here, so tuning a family is a
 one-file edit and the diff for a tuning experiment is legible. Nothing here
 touches the network or the SDK.
+
+The comments retain historical development observations and hypotheses, not
+validated causal effects, formal dominance proofs, or a current platform spec.
+See paper/AUDIT_NOTES.md. Executable defaults are the final-night configuration;
+the historical test reference is separately identified in tests/conftest.py.
 """
 
 from __future__ import annotations

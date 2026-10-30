@@ -1,0 +1,6 @@
+slot,agent_name,games_counter_first_snapshot,games_counter_last_snapshot,games_in_window,overall_first_snapshot,overall_last_snapshot
+B1,glee-agent,62682,65877,3195,2203.9,2298.5
+B2,7aidara,43242,46305,3063,2204.5,2301.8
+B3,7aidara_Alpha,40537,43482,2945,2262.7,2301.5
+B4,7aidara_Beta,39884,42973,3089,2200.1,2321.0
+B5,7aidara_Gamma,40825,43953,3128,2177.4,2344.3

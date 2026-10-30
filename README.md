@@ -1,5 +1,10 @@
-# 7aidara_Gamma — GLEE competition agent and submitted paper
+# 7aidara_Gamma — GLEE competition agent and paper
 
+The paper was accepted as a Spotlight in the competition track of the IAB
+workshop at NeurIPS 2026.
+
+[Read the camera-ready paper](paper/camera_ready/glee_competition_paper_camera_ready.pdf) ·
+[What changed after review](paper/camera_ready/README.md) ·
 [Read the submitted paper](paper/glee_competition_paper.pdf) ·
 [Paper sources and build](paper/README.md) ·
 [Analysis instructions](paper/analysis/README.md) ·
@@ -44,6 +49,7 @@ The runnable code uses the final-night configuration.
 | `tests/` | Historical reference expectations and analysis regression tests |
 | `tools/` | Setup check, transcript reader, post-mortem analysis |
 | `paper/` | Exact submitted PDF, matching NeurIPS 2026 sources, build/check script |
+| `paper/camera_ready/` | Camera-ready PDF, the scripted edits from the submission, Figure 1 data |
 | `paper/analysis/` | Corrected observational analysis code; inputs and limits documented |
 | `paper/change-register.html` | Incomplete historical notebook, with audit qualifications |
 

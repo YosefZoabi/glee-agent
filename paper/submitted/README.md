@@ -2,7 +2,7 @@
 
 [Read the submitted PDF](glee_competition_paper.pdf).
 
-This is the version submitted on 6 September 2026, the one the two reviews
+This is the version submitted on 6 September 2026 as *Below the Noise Floor: A Deterministic GLEE Agent and the Measurement Problem It Exposed*, the one the two reviews
 (yxm9 and w8XP) refer to. It is kept byte-for-byte unchanged as an archive. The
 published camera-ready version is in [the parent folder](../README.md), which
 derives it from these sources by a script of asserted edits and lists every

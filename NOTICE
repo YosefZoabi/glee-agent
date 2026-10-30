@@ -8,8 +8,9 @@ The MIT terms in [LICENSE](LICENSE) cover the **software** in this repository:
 - `paper/analysis/` — the analysis scripts behind the paper's numbers
 - `paper/build.py`, `paper/gen_fig.py` and `paper/submitted/build.py`
 
-They do **not** cover the paper. "Below the Noise Floor: A Deterministic GLEE
-Agent and the Measurement Problem It Exposed" — its camera-ready and submitted
+They do **not** cover the paper. "Same Policy, Different Ratings: A Deterministic
+GLEE Agent and the Measurement Problem It Exposed" (submitted as "Below the
+Noise Floor") — its camera-ready and submitted
 PDFs, its LaTeX sources (`paper/glee_competition_paper.tex`,
 `paper/fig_noise.tex` and the `.tex` files in `paper/submitted/`),
 the manuscript text inside `paper/make_camera_ready.py`, and the change register

@@ -1,7 +1,7 @@
 # 7aidara_Gamma — GLEE competition agent and paper
 
-The paper was accepted as a Spotlight in the competition track of the IAB
-workshop at NeurIPS 2026.
+The paper, *Same Policy, Different Ratings: A Deterministic GLEE Agent and the Measurement Problem It Exposed*, was accepted as a Spotlight in the competition track of
+the IAB workshop at NeurIPS 2026.
 
 [Read the paper](paper/glee_competition_paper.pdf) ·
 [Sources, build and changes after review](paper/README.md) ·

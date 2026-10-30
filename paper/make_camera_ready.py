@@ -27,10 +27,21 @@ r"""% Camera-ready format required by the GLEE competition organizers.
   \usepackage[sglblindworkshop, final]{neurips_2026}%
 }{""", "style options")
 
-edit(r"""\title{Below the Noise Floor""",
+edit(r"""\title{Below the Noise Floor: A Deterministic GLEE Agent\\
+       and the Measurement Problem It Exposed}""",
 r"""\workshoptitle{Interpreting Agent Behavior (IAB) -- GLEE Competition Track}
 
-\title{Below the Noise Floor""", "workshop title")
+\title{Same Policy, Different Ratings:\\
+       A Deterministic GLEE Agent and\\
+       the Measurement Problem It Exposed}""", "workshop title, camera-ready title")
+
+edit(r"""pdftitle={Below the Noise Floor: A Deterministic GLEE Agent and the Measurement Problem It Exposed}""",
+r"""pdftitle={Same Policy, Different Ratings: A Deterministic GLEE Agent and the Measurement Problem It Exposed}""",
+     "pdf title")
+
+edit(r"""%  Below the Noise Floor
+""", r"""%  Same Policy, Different Ratings (submitted as "Below the Noise Floor")
+""", "header comment title")
 
 edit(r"""  Yosef Zoabi\\
   \texttt{yosef.zoabi@campus.technion.ac.il}\\""",

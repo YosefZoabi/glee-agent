@@ -1,6 +1,7 @@
 # Competition paper (camera-ready)
 
-[Read the paper](glee_competition_paper.pdf). This is the camera-ready version for
+[Read the paper](glee_competition_paper.pdf): *Same Policy, Different Ratings: A Deterministic GLEE Agent and the Measurement Problem It Exposed*.
+This is the camera-ready version for
 the IAB workshop at NeurIPS 2026 (GLEE Competition Track), where the paper was
 accepted as a Spotlight. The version submitted on 6 September 2026, which the
 reviews refer to, is kept unchanged in [submitted/](submitted/README.md).
@@ -32,7 +33,7 @@ Poppler's `pdftotext` and `pdffonts` enable the text and font checks.
 | Figure 1 plots absolute ratings; the largest spread sits at the first snapshot (both reviewers) | Figure 1 now has two panels: (a) overall ratings, (b) change since each slot's first snapshot, R_i(t) - R_i(0). Starting and ending ratings are in the caption. |
 | Report starting ratings, initial and terminal spreads, spread after normalizing, rank changes (w8XP) | Section 3 reports the 85.3-point starting spread, 45.8-point ending spread, that the 88.0 maximum came ten minutes in (so it is inherited), gains of +39 to +167, 31 distinct orderings, every slot leading at least once, and each slot's game count (2,945-3,195). |
 | Separate inherited offsets from dispersion accrued during the window (both) | Section 3 applies the stated EMA: only 6-21 points of the starting gap should persist, leaving a 49-64-point accrued spread. Labelled model-dependent. |
-| "Noise floor" overstates what the experiment identifies (w8XP) | Text now says dispersion throughout and states the spreads are not an identified noise floor. The title is kept by the author's choice. |
+| "Noise floor" overstates what the experiment identifies (w8XP) | Text now says dispersion throughout and states the spreads are not an identified noise floor. The title changed from "Below the Noise Floor" to "Same Policy, Different Ratings", which states the finding without the noise-floor claim; it says "same policy" rather than "same build" for the reason in the next row. |
 | Byte-identical claim vs. verification of a reference build only (yxm9) | "Byte-identical builds" replaced by "slots running the same policy"; Appendix B states the deployment procedure and that per-slot hashes were not recorded. |
 | Simplified EMA must stay clearly separate from the server rule (w8XP) | Section 3 says it is a fitted approximation, not the documented rule, and that conclusions using it are model-dependent; adds that overall = unweighted mean of the three family ratings (verified against the leaderboard API). |
 | Replay is implementation validation, not policy-value estimation (w8XP) | Section 4 says so explicitly and recommends counting changed actions before any live arm. |

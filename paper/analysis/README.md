@@ -15,6 +15,7 @@ No API key or network request is needed for analysis.
 | `S` | Directory of private JSON exports. `human_persuasion.json`, `human_replays.json`, `human_replays_rand.json`, `human_barg_recent.json` map IDs to game objects; `human_hist_full.json` is a list. Game objects carry `config`, `state`, `your_player`, `moves`, `result`. |
 | `B` | Buyer-replay JSONL: each game has a `history` list with `seller_message`, `bought`, `quality`; `m` and `p` identify a cell where available. This is a distinct cohort, not J. |
 | `H` | Finalized raw history JSON, list or ID-keyed mapping, including timeouts; fields include `game_id`, `your_player`, `your_player_type`, `rating_delta`, `completed_at`, `result.outcome`. Conflicting overlapping snapshots are rejected. |
+| `L` | Directory of one slot's turn logs, `turns-YYYYMMDD.jsonl`, as written by the agent's logger (private; contains opponents' moves). |
 | `P` | Original simultaneous-poll CSV: `elapsed_hours,agent,overall`; optionally `bargaining,negotiation,persuasion`. Every timestamp must contain the same agent set. Deployment identity must be established separately. |
 
 J's refusal analysis additionally requires `faced` entries
@@ -26,11 +27,12 @@ offer rounds and results. Keep private inputs outside the repository.
 ```sh
 python paper/analysis/noise.py
 python paper/analysis/percentile.py
+python paper/submitted/build.py --check
 python paper/build.py --check
 python -m pytest tests/test_paper_analysis.py
 ```
 
-`noise.py` reads the rounded coordinates in `../fig_noise.tex`, calibrates
+`noise.py` reads the rounded coordinates in `../submitted/fig_noise.tex`, calibrates
 their axes, and reports approximate initial/mean/max/final spreads. Compiling
 the submitted TikZ source reproduces the figure. This is **not** recovery of the
 original polling dataset, and does not validate the family maximum or game counts.
@@ -60,6 +62,7 @@ python paper/analysis/noise.py --snapshots /private/polls.csv --metric bargainin
 | `python paper/analysis/pers_cmp.py S J` | Observational cell-level persuasion means. Requires only `human_persuasion.json` within S. |
 | `python paper/analysis/pers_pool.py S J` | Table 1 persuasion means, per-row n and descriptive Welch-form t; missing payoffs are excluded. |
 | `python paper/analysis/pers_pool.py S J --buyer-replays B` | The same table plus separate agent purchase-quality counts. |
+| `python paper/analysis/walkaway.py L 20260826 20260830` | Section 6 walk-away counts in untradable seats (seat defined as in `glee_agent/strategies/negotiation.py`), split into walked, no decision turn, accepted and other. One slot only. |
 
 `human.py` and `human2.py` use all five named S exports;
 `table_human.py` uses the three bargaining replay mappings.
@@ -75,6 +78,6 @@ No displayed t or bootstrap interval accounts for all time/opponent dependence.
 
 The public release does not include the original joined-log builder, all
 decision-replay reconstruction code, a complete 49-run ledger, raw rating polls,
-or private transcripts. The historical aggregate JSON in `../data/` predates
+or private transcripts. The historical aggregate JSON in `../data/breakeven_legacy_diagnostics.json` predates
 these corrections. Tests check code on synthetic cases, not empirical results.
 Organizer data availability, if it changes, must be checked rather than assumed.

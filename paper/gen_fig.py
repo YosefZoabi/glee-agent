@@ -1,16 +1,17 @@
 """Generate the two-panel camera-ready Figure 1 from the submitted figure's coordinates.
 
-Input: ../fig_noise.tex (rounded TikZ coordinates of the submitted figure).
+Input: submitted/fig_noise.tex (rounded TikZ coordinates of the submitted figure).
+Output: fig_noise.tex and data/fig1_overall_snapshots.csv.
 Panel (a): overall ratings as submitted. Panel (b): change since the first
 snapshot, R_i(t) - R_i(0). Values are decoded approximations (about +-0.1 point).
 """
 import sys
 from pathlib import Path
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "analysis"))
+sys.path.insert(0, str(HERE / "analysis"))
 from noise import figure_polls
 
-polls = figure_polls(HERE.parent / "fig_noise.tex")
+polls = figure_polls(HERE / "submitted" / "fig_noise.tex")
 names = ["B1", "B2", "B3", "B4", "B5"]
 T = polls[-1]["elapsed_hours"]
 W, H = 5.55, 2.25          # panel width/height in tikz units

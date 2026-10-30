@@ -37,14 +37,14 @@ def private_inputs(tmp_path):
 
 
 def test_exact_submitted_pdf_and_assembled_sources():
-    spec = importlib.util.spec_from_file_location("paper_build", ROOT / "paper" / "build.py")
+    spec = importlib.util.spec_from_file_location("paper_build", ROOT / "paper" / "submitted" / "build.py")
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     _, digest = module.check_submission()
     assert digest == "f916fe323968ca01be4c2f8ec860088f1b51f2f74db88d3e68bc223545d15097"
 
 
 def test_figure_summary_is_explicitly_approximate():
-    result = summarize(figure_polls(ROOT / "paper" / "fig_noise.tex"))
+    result = summarize(figure_polls(ROOT / "paper" / "submitted" / "fig_noise.tex"))
     assert result["polls"] == 45
     assert result["initial_spread"] == pytest.approx(85.4, abs=.2)
     assert result["maximum_spread"] == pytest.approx(88, abs=.2)

@@ -71,7 +71,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--snapshots", type=Path, help="Original long-form rating-poll CSV.")
     parser.add_argument("--metric", choices=["overall", "bargaining", "negotiation", "persuasion"], default="overall")
-    parser.add_argument("--figure", type=Path, default=Path(__file__).resolve().parents[1] / "fig_noise.tex")
+    parser.add_argument("--figure", type=Path, default=Path(__file__).resolve().parents[1] / "submitted" / "fig_noise.tex")
     args = parser.parse_args()
     try:
         if args.snapshots:

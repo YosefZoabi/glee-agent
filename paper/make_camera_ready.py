@@ -1,13 +1,14 @@
 """Derive the camera-ready source from the submitted paper.
 
-The submitted fragments in ../ stay untouched. Every edit below is an exact,
+Reads submitted/glee_competition_paper.tex, which stays untouched, and writes
+glee_competition_paper.tex next to this script. Every edit below is an exact,
 asserted replacement, so a reader can audit what changed between the reviewed
 submission and the camera-ready version.
 """
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-src = (HERE.parent / "glee_competition_paper.tex").read_text(encoding="utf-8")
+src = (HERE / "submitted" / "glee_competition_paper.tex").read_text(encoding="utf-8")
 EDITS = []
 
 
@@ -383,7 +384,7 @@ and slot, a timestamp, the overall and three family ratings, cumulative games by
 family and role, and the deployed source, configuration and entry-point hashes.
 The camera-ready release adds the 45 plotted overall ratings and each slot's game
 counter and rating at the first and last snapshot
-(\texttt{paper/camera\_ready/data}). The family-level snapshots behind the
+(\texttt{paper/data}). The family-level snapshots behind the
 within-family spreads are not part of the release, and deployment hashes were
 not recorded.""", "manifest")
 

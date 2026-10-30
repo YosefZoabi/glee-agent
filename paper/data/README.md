@@ -1,4 +1,6 @@
-# Figure 1 data (camera-ready)
+# Data released with the paper
+
+## Figure 1 (camera-ready)
 
 The identical-policy experiment ("run58") polled five slots together 45 times
 between 2026-08-29 10:58 and 19:37 (as logged by the poller).
@@ -14,3 +16,9 @@ Not included: per-family ratings and game counts per snapshot, and per-slot
 source, configuration and entry-point hashes. The family snapshots behind the
 reported within-family spreads were kept in a local working directory and are
 not part of this release; deployment hashes were not recorded.
+
+## Historical diagnostics
+
+- `breakeven_legacy_diagnostics.json`: historical break-even fit diagnostics
+  that predate the corrected analysis; see the
+  [audit notes](../AUDIT_NOTES.md) before using them.

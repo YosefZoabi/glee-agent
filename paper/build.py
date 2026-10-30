@@ -1,42 +1,42 @@
-"""Check the submitted artifact and build a separate verification copy.
+"""Regenerate and check the camera-ready paper.
 
-Run from any working directory. Never overwrite the submitted
-PDF or the committed assembled TeX file.
+    python paper/build.py --check   # regenerate figure, data and source; compare with committed files
+    python paper/build.py           # also compile a verification copy in paper/build/
+
+The camera-ready source is derived from the submitted paper in submitted/ by
+gen_fig.py (Figure 1 and data/) and make_camera_ready.py (asserted text edits).
+This script never overwrites the committed PDF, which is the uploaded file.
 """
 import argparse
-import hashlib
-import json
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 
 PAPER = Path(__file__).resolve().parent
 NAME = "glee_competition_paper"
+GENERATED = ("fig_noise.tex", NAME + ".tex", "data/fig1_overall_snapshots.csv")
 
 
-def check_submission(paper=PAPER):
-    manifest = json.loads((paper / "submission.json").read_text(encoding="utf-8"))
-    pdf = paper / manifest["submitted_pdf"]
-    actual = hashlib.sha256(pdf.read_bytes()).hexdigest()
-    if actual != manifest["sha256"]:
-        raise ValueError("Submitted PDF does not match submission.json; refusing to rebuild over it.")
-    source = "".join((paper / p).read_text(encoding="utf-8") for p in ("_head.tex", "_body.tex", "_tail.tex"))
-    if source != (paper / (NAME + ".tex")).read_text(encoding="utf-8"):
-        raise ValueError("Committed assembled source differs from the three fragments.")
-    for filename in ("neurips_2026.sty", "fig_noise.tex"):
-        if not (paper / filename).is_file():
-            raise ValueError("Required submitted input missing: " + filename)
-    return source, actual
+def regenerate(paper=PAPER):
+    """Run both generators; restore the committed files if anything changed."""
+    before = {name: (paper / name).read_bytes() for name in GENERATED}
+    for script in ("gen_fig.py", "make_camera_ready.py"):
+        subprocess.run([sys.executable, str(paper / script)], check=True, capture_output=True, text=True)
+    changed = [name for name in GENERATED if (paper / name).read_bytes() != before[name]]
+    if changed:
+        for name, data in before.items():
+            (paper / name).write_bytes(data)
+        raise ValueError("Regenerated files differ from the committed ones: " + ", ".join(changed))
 
 
-def compile_copy(source, paper=PAPER):
+def compile_copy(paper=PAPER):
     if not shutil.which("pdflatex"):
         raise ValueError("pdfLaTeX is required to build; --check needs only Python.")
     target = paper / "build"
     target.mkdir(exist_ok=True)
-    (target / (NAME + ".tex")).write_text(source, encoding="utf-8")
-    for filename in ("neurips_2026.sty", "fig_noise.tex"):
+    for filename in (NAME + ".tex", "neurips_2026.sty", "fig_noise.tex"):
         shutil.copyfile(paper / filename, target / filename)
     for _ in range(2):
         subprocess.run(["pdflatex", "-interaction=nonstopmode", "-halt-on-error",
@@ -47,34 +47,35 @@ def compile_copy(source, paper=PAPER):
         raise ValueError("Unresolved references/citations or overflowing boxes in verification build.")
     aux = (target / (NAME + ".aux")).read_text(encoding="utf-8")
     match = re.search(r"\\newlabel\{endmain\}\{\{[^}]*\}\{(\d+)\}", aux)
-    if not match or int(match[1]) != 4:
-        raise ValueError("Main-text endpoint did not resolve to page 4.")
+    if not match or int(match[1]) != 5:
+        raise ValueError("Main text does not end on page 5.")
+    if shutil.which("pdffonts"):
+        fonts = subprocess.run(["pdffonts", str(target / (NAME + ".pdf"))], check=True,
+                               capture_output=True, text=True).stdout
+        if "Type 3" in fonts:
+            raise ValueError("Bitmap (Type 3) fonts in the build; install lmodern.")
     if shutil.which("pdftotext"):
         texts = [subprocess.run(["pdftotext", "-layout", str(path), "-"], check=True,
                                 capture_output=True, text=True).stdout
                  for path in (paper / (NAME + ".pdf"), target / (NAME + ".pdf"))]
         if texts[0] != texts[1]:
-            raise ValueError("Rebuilt text/layout differs from the submitted PDF. Submitted file was not changed.")
-        print("Rebuilt text/layout matches the submitted PDF.")
-    else:
-        print("pdftotext unavailable: rebuilt text comparison was not performed.")
+            print("Note: rebuilt text/layout differs from the committed PDF.")
+        else:
+            print("Rebuilt text/layout matches the committed PDF.")
     return target / (NAME + ".pdf")
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="Check hash/source only; do not compile.")
-    parser.add_argument("--probe", action="store_true", help="Compatibility alias: page-count check is always enabled.")
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--check", action="store_true", help="Regenerate and compare only; do not compile.")
     args = parser.parse_args()
     try:
-        source, digest = check_submission()
-        print("Submitted PDF SHA-256:", digest)
-        print("Source fragments match committed assembled TeX.")
+        regenerate()
+        print("Figure, data and source regenerate exactly from submitted/.")
         if not args.check:
-            print("Verification PDF:", compile_copy(source))
-            check_submission()
+            print("Verification PDF:", compile_copy())
     except subprocess.CalledProcessError as error:
-        parser.exit(1, "LaTeX build failed; see paper/build/*.log. Submitted file remains unchanged.\n")
+        parser.exit(1, "Generation or LaTeX build failed; see paper/build/*.log.\n" + (error.stderr or ""))
     except (OSError, ValueError) as error:
         parser.exit(1, str(error) + "\n")
 

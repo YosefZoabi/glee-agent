@@ -3,10 +3,9 @@
 The paper was accepted as a Spotlight in the competition track of the IAB
 workshop at NeurIPS 2026.
 
-[Read the camera-ready paper](paper/camera_ready/glee_competition_paper_camera_ready.pdf) ·
-[What changed after review](paper/camera_ready/README.md) ·
-[Read the submitted paper](paper/glee_competition_paper.pdf) ·
-[Paper sources and build](paper/README.md) ·
+[Read the paper](paper/glee_competition_paper.pdf) ·
+[Sources, build and changes after review](paper/README.md) ·
+[Submitted version](paper/submitted/README.md) ·
 [Analysis instructions](paper/analysis/README.md) ·
 [Audit notes](paper/AUDIT_NOTES.md)
 
@@ -16,8 +15,9 @@ builds, not all on the single ranked slot. The paper is an observational case
 study of rating dispersion and behavioral auditing, not a proof that leaderboard
 evaluation generally fails or that a deterministic agent is universally better.
 
-The submitted PDF's checksum is recorded in
-[submission.json](paper/submission.json). Analysis methods and data availability
+The paper in `paper/` is the camera-ready version. The submitted version is
+archived in `paper/submitted/`, with its checksum in
+[submission.json](paper/submitted/submission.json). Analysis methods and data availability
 are described in the accompanying documentation.
 
 ## Agent
@@ -48,8 +48,9 @@ The runnable code uses the final-night configuration.
 | `glee_agent/` | Policies, parameters, dispatcher, state readers, safety, logging |
 | `tests/` | Historical reference expectations and analysis regression tests |
 | `tools/` | Setup check, transcript reader, post-mortem analysis |
-| `paper/` | Exact submitted PDF, matching NeurIPS 2026 sources, build/check script |
-| `paper/camera_ready/` | Camera-ready PDF, the scripted edits from the submission, Figure 1 data |
+| `paper/` | Camera-ready PDF and source, scripted edits from the submission, build/check script |
+| `paper/submitted/` | Exact submitted PDF, matching NeurIPS 2026 sources, build/check script |
+| `paper/data/` | Figure 1 values and per-slot counters; historical break-even diagnostics |
 | `paper/analysis/` | Corrected observational analysis code; inputs and limits documented |
 | `paper/change-register.html` | Incomplete historical notebook, with audit qualifications |
 

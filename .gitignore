@@ -31,6 +31,7 @@ venv/
 *.synctex.gz
 paper/glee_competition_paper.log
 paper/build/
+paper/camera_ready/build/
 # Private history exports, regardless of where a local analysis is run.
 human_*.json
 joined*.json
@@ -40,3 +41,5 @@ polls*.csv
 .claude/
 *.bak
 .DS_Store
+paper/camera_ready/*.log
+paper/camera_ready/glee_competition_paper.pdf

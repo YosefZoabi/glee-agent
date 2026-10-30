@@ -2,6 +2,11 @@
 
 [Read the submitted PDF](glee_competition_paper.pdf).
 
+The camera-ready version, revised after review and accepted as a Spotlight,
+lives in [camera_ready/](camera_ready/README.md). It is derived from these
+submitted sources by a script of asserted edits, so the submission below stays
+byte-for-byte unchanged.
+
 Competition paper submitted on 6 September 2026.
 Its SHA-256 is recorded in [submission.json](submission.json). The submission
 has four main-text pages, one reference page, and three appendix pages, using
